@@ -101,7 +101,17 @@ class RlsIsolationTest {
             // P2 tables
             UUID set = UUID.randomUUID();
             exec(c, "INSERT INTO testsets (id, workspace_id, name, status, params) VALUES (?, ?, ?, 'DRAFT', ?::jsonb)", set, ws, canary, "{\"c\":\"" + canary + "\"}");
-            exec(c, "INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, qtype, origin) VALUES (?, ?, ?, ?, 'FACTUAL', 'MANUAL')", ws, set, canary, canary);
+            UUID question = UUID.randomUUID();
+            exec(c, "INSERT INTO test_questions (id, workspace_id, testset_id, question, expected_answer, qtype, origin) VALUES (?, ?, ?, ?, ?, 'FACTUAL', 'MANUAL')", question, ws, set, canary, canary);
+            // P3 tables
+            UUID cfg = UUID.randomUUID(), exp = UUID.randomUUID(), runA = UUID.randomUUID(), runB = UUID.randomUUID();
+            exec(c, "INSERT INTO pipeline_configs (id, workspace_id, config, config_hash) VALUES (?, ?, ?::jsonb, ?)", cfg, ws, "{\"c\":\"" + canary + "\"}", "cfg-" + canary);
+            exec(c, "INSERT INTO experiments (id, workspace_id, testset_id, name) VALUES (?, ?, ?, ?)", exp, ws, set, canary);
+            exec(c, "INSERT INTO runs (id, workspace_id, experiment_id, config_id, label, ordinal) VALUES (?, ?, ?, ?, ?, 0)", runA, ws, exp, cfg, canary);
+            exec(c, "INSERT INTO runs (id, workspace_id, experiment_id, config_id, label, ordinal) VALUES (?, ?, ?, ?, ?, 1)", runB, ws, exp, cfg, canary);
+            exec(c, "INSERT INTO run_results (workspace_id, run_id, question_id, answer) VALUES (?, ?, ?, ?)", ws, runA, question, canary);
+            exec(c, "INSERT INTO run_metrics (run_id, workspace_id, metric, n) VALUES (?, ?, ?, 1)", runA, ws, "m-" + canary);
+            exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
             return null;
         });
     }

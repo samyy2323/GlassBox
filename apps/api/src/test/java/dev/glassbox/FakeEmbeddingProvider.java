@@ -21,6 +21,8 @@ public class FakeEmbeddingProvider implements EmbeddingProvider {
     public static final AtomicInteger CALLS = new AtomicInteger();
     /** While positive, embed() throws and decrements: simulates a sidecar outage. */
     public static final AtomicInteger FAIL_NEXT = new AtomicInteger();
+    /** The call number (see CALLS) that throws once, to simulate an outage part-way through a long job; 0 = off. */
+    public static final AtomicInteger FAIL_ON_CALL = new AtomicInteger();
     private static final Pattern WORD = Pattern.compile("\\p{L}[\\p{L}\\p{N}]*");
 
     @Override public String modelId() { return "bge-small-en-v1.5"; }
@@ -29,7 +31,11 @@ public class FakeEmbeddingProvider implements EmbeddingProvider {
 
     @Override
     public List<float[]> embed(List<String> texts) {
-        CALLS.incrementAndGet();
+        int call = CALLS.incrementAndGet();
+        if (FAIL_ON_CALL.get() == call) {
+            FAIL_ON_CALL.set(0);
+            throw new IllegalStateException("sidecar went away on call " + call + " (simulated)");
+        }
         if (FAIL_NEXT.getAndUpdate(n -> n > 0 ? n - 1 : 0) > 0) throw new IllegalStateException("sidecar down (simulated)");
         TEXTS_EMBEDDED.addAndGet(texts.size());
         List<float[]> out = new ArrayList<>();
