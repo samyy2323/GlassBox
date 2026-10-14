@@ -8,6 +8,8 @@ import { WorkspaceProvider } from './lib/workspace'
 import Chat from './pages/Chat'
 import Documents from './pages/Documents'
 import Login from './pages/Login'
+import TestSetReview from './pages/TestSetReview'
+import TestSets from './pages/TestSets'
 import XRay from './pages/XRay'
 import XRayList from './pages/XRayList'
 
@@ -42,6 +44,8 @@ export default function App() {
               <Route path="/chat" element={<Chat />} />
               <Route path="/chat/:traceId" element={<Chat />} />
               <Route path="/documents" element={<Documents />} />
+              <Route path="/testsets" element={<TestSets />} />
+              <Route path="/testsets/:id/review" element={<TestSetReview />} />
               <Route path="/xray" element={<XRayList />} />
               <Route path="/xray/:traceId" element={<XRay />} />
               <Route path="*" element={<Navigate to="/chat" replace />} />

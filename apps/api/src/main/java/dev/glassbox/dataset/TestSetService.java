@@ -165,6 +165,7 @@ public class TestSetService {
             }
             if (flag != null && !flag.isBlank()) {
                 if (flag.equals("NONE")) sql.append(" AND cardinality(quality_flags) = 0");
+                else if (flag.equals("ANY")) sql.append(" AND cardinality(quality_flags) > 0");
                 else {
                     sql.append(" AND ? = ANY (quality_flags)");
                     args.add(flag);
@@ -240,10 +241,11 @@ public class TestSetService {
     }
 
     /** Reviewer actions: accept, reject, put back to pending, and/or edit text or evidence. Any edit marks the question EDITED. */
-    public Question patch(Principal p, UUID ws, UUID questionId, String question, String expected, String reviewStatus, List<SpanInput> spans) {
+    public Question patch(Principal p, UUID ws, UUID questionId, String question, String expected, String reviewStatus, List<SpanInput> spans, String qtype) {
         if (reviewStatus != null && !Set.of("ACCEPTED", "REJECTED", "PENDING").contains(reviewStatus)) {
             throw ApiException.badRequest("reviewStatus must be ACCEPTED, REJECTED or PENDING (edits are marked automatically)");
         }
+        if (qtype != null && !MANUAL_TYPES.contains(qtype)) throw ApiException.badRequest("qtype must be one of " + MANUAL_TYPES);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.EDITOR);
             var setIds = j.queryForList("SELECT testset_id FROM test_questions WHERE id = ?", UUID.class, questionId);
@@ -256,11 +258,13 @@ public class TestSetService {
             List<GoldSpan> oldSpans = readSpans(current.spans());
             List<GoldSpan> newSpanList = spans == null ? oldSpans : resolveSpans(j, spans);
             String newSpans = writeSpans(newSpanList);
-            boolean contentChanged = !newQuestion.equals(current.question()) || !newAnswer.equals(current.answer()) || !samePlaces(oldSpans, newSpanList);
+            String newType = qtype == null ? current.qtype() : qtype;
+            boolean contentChanged = !newQuestion.equals(current.question()) || !newAnswer.equals(current.answer()) || !samePlaces(oldSpans, newSpanList)
+                    || !newType.equals(current.qtype());
             String status = reviewStatus != null ? reviewStatus : current.status();
             if (contentChanged && !"REJECTED".equals(status)) status = "EDITED";
-            j.update("UPDATE test_questions SET question = ?, expected_answer = ?, gold_chunk_spans = ?::jsonb, review_status = ? WHERE id = ?",
-                    newQuestion, newAnswer, newSpans, status, questionId);
+            j.update("UPDATE test_questions SET question = ?, expected_answer = ?, gold_chunk_spans = ?::jsonb, qtype = ?, review_status = ? WHERE id = ?",
+                    newQuestion, newAnswer, newSpans, newType, status, questionId);
             Raw updated = j.query("SELECT " + Q_COLS + " FROM test_questions WHERE id = ?", RAW, questionId).get(0);
             return hydrate(j, List.of(updated)).get(0);
         });

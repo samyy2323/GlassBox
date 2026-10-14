@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { CornerDownLeft, Files, LogOut, MessageSquare, MessageSquarePlus, Moon, ScanSearch, Search, Sun, Upload } from 'lucide-react'
+import { CornerDownLeft, Files, ListChecks, LogOut, MessageSquare, MessageSquarePlus, Moon, ScanSearch, Search, Sun, Upload } from 'lucide-react'
 
 export interface Command {
   id: string
@@ -96,6 +96,7 @@ export const paletteIcons = {
   newChat: <MessageSquarePlus className="h-4 w-4" />,
   library: <Files className="h-4 w-4" />,
   xray: <ScanSearch className="h-4 w-4" />,
+  testsets: <ListChecks className="h-4 w-4" />,
   upload: <Upload className="h-4 w-4" />,
   chat: <MessageSquare className="h-4 w-4" />,
   sun: <Sun className="h-4 w-4" />,

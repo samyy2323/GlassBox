@@ -64,6 +64,15 @@ public class JobQueue {
                 "UPDATE jobs SET status = 'DONE', locked_by = NULL, locked_at = NULL, error = NULL WHERE id = ?", job.id()));
     }
 
+    /**
+     * Tells the queue a long job is still alive. Without it the reaper would hand a job that runs longer than its lock lifetime
+     * to a second worker while the first is still working (test set generation takes minutes).
+     */
+    public void heartbeat(Job job) {
+        tx.workspace(job.workspaceId(), null, j -> j.update(
+                "UPDATE jobs SET locked_at = now() WHERE id = ? AND status = 'RUNNING'", job.id()));
+    }
+
     /** Requeues with exponential backoff (10 s * 2^attempts), or marks DEAD after the last attempt. */
     public boolean fail(Job job, String error) {
         boolean dead = job.attempts() >= MAX_ATTEMPTS;

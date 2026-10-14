@@ -138,8 +138,8 @@ class TestSetApiTest extends ApiTestSupport {
     @Test
     void weakQuestionsAreFlaggedNotDropped() throws Exception {
         Account a = accountWithDocs(2, 5);
-        // The same question every time (duplicates), mentioning "the document" (ambiguous), with an answer that is not in the text.
-        FakeLlmProvider.GENERATOR_SCRIPT = r -> scripted("What does the document say about zebras and giraffes?", "Zebras and giraffes graze together");
+        // The same question every time (duplicates), mentioning "the document" (ambiguous), which the answering check cannot answer from the evidence.
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> scripted("What does the document say about reporting NOTANSWERABLE?", "The system reports its health to operators every day.");
         JsonNode t = generated(a, "weak", 3);
         List<JsonNode> qs = questions(a, t.get("id").asText(), "");
         assertThat(qs).hasSize(3);
@@ -155,6 +155,7 @@ class TestSetApiTest extends ApiTestSupport {
         assertThat(t.get("stats").get("byFlag").get("DUPLICATE").asInt()).isEqualTo(2);
         assertThat(questions(a, t.get("id").asText(), "&flag=DUPLICATE")).hasSize(2);
         assertThat(questions(a, t.get("id").asText(), "&flag=NONE")).isEmpty();
+        assertThat(questions(a, t.get("id").asText(), "&flag=ANY")).hasSize(3);
     }
 
     @Test
@@ -226,6 +227,52 @@ class TestSetApiTest extends ApiTestSupport {
         assertThat(qs).hasSize(6);
         assertThat(qs.stream().map(q -> q.get("stableId").asText()).distinct()).hasSize(6);
         assertThat(calls.get()).as("3 done, 1 failed, 3 more: finished questions were not regenerated").isEqualTo(7);
+    }
+
+    @Test
+    void aRunThatFindsAnotherRunAheadOfItWritesNothing() throws Exception {
+        Account a = accountWithDocs(2, 5);
+        String id = generate(a, "race", 4).get("id").asText();
+        // While this run is busy with the model, another run of the same job moves the test set on (a reaped lock, a duplicate delivery).
+        AtomicInteger calls = new AtomicInteger();
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> {
+            if (calls.incrementAndGet() == 1) tx.workspace(a.workspace(), null, j -> j.update("UPDATE testsets SET samples_done = samples_done + 1 WHERE id = ?::uuid", id));
+            return null;
+        };
+        drainQueue();
+        JsonNode t = set(a, id);
+        assertThat(t.get("generatedCount").asInt()).as("the stale run did not add a question on top of the other run's work").isZero();
+        assertThat(questions(a, id, "")).isEmpty();
+        assertThat(calls.get()).as("and it stopped instead of carrying on").isEqualTo(1);
+    }
+
+    @Test
+    void aPassageThatHoldsNoneOfTheAnswerIsNotEvidence() throws Exception {
+        Account a = accountWithDocs(2, 6);
+        // The answer is a code that only the first passage contains. The sampler paired that passage with a second one for each
+        // multi-hop question, but the question only used the first: it must end up as a one-passage question with one span.
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> {
+            var m = java.util.regex.Pattern.compile("Unique marker ([0-9a-f-]{36})").matcher(r.messages().get(1).content());
+            return m.find() ? scripted("What is the audit reference code printed at the end of this part of the guide?", m.group(1)) : null;
+        };
+        String id = ok(send(post("/api/testsets/generate"), a, "{\"name\":\"one-sided\",\"count\":4,\"mix\":{\"MULTI_HOP\":1},\"seed\":3}")).get("testset").get("id").asText();
+        drainQueue();
+        List<JsonNode> qs = questions(a, id, "");
+        assertThat(qs).isNotEmpty();
+        for (JsonNode q : qs) {
+            assertThat(q.get("evidence")).as("only the passage with the code is evidence").hasSize(1);
+            assertThat(q.get("qtype").asText()).as("so it is not labelled multi-hop").isIn("FACTUAL", "NUMERIC");
+            assertThat(q.get("evidence").get(0).get("text").asText()).contains("Unique marker");
+        }
+    }
+
+    @Test
+    void aMadeUpAnswerThatIsNotInThePassageIsSkipped() throws Exception {
+        Account a = accountWithDocs(1, 4);
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> scripted("What colour are the flamingos on the roof?", "Pink flamingos stand on one leg");
+        JsonNode t = generated(a, "invented", 2);
+        assertThat(t.get("status").asText()).isEqualTo("FAILED");
+        assertThat(questions(a, t.get("id").asText(), "")).isEmpty();
     }
 
     @Test
@@ -361,6 +408,19 @@ class TestSetApiTest extends ApiTestSupport {
                 + "\",\"charStart\":" + start + ",\"charEnd\":" + (start + 20) + "}]}"));
         assertThat(moved.get("reviewStatus").asText()).isEqualTo("EDITED");
         assertThat(moved.get("evidence").get(0).get("text").asText()).isEqualTo(content.get("text").asText().substring(start, start + 20));
+    }
+
+    @Test
+    void aReviewerCanCorrectTheQuestionType() throws Exception {
+        Account a = accountWithDocs(1, 4);
+        String id = generated(a, "types", 2).get("id").asText();
+        JsonNode q = questions(a, id, "").get(0);
+        JsonNode changed = ok(send(patch("/api/questions/" + q.get("id").asText()), a, "{\"qtype\":\"COMPARISON\"}"));
+        assertThat(changed.get("qtype").asText()).isEqualTo("COMPARISON");
+        assertThat(changed.get("reviewStatus").asText()).as("a corrected type is an edit").isEqualTo("EDITED");
+        send(patch("/api/questions/" + q.get("id").asText()), a, "{\"qtype\":\"NOPE\"}").andExpect(status().isBadRequest());
+        JsonNode same = ok(send(patch("/api/questions/" + questions(a, id, "").get(1).get("id").asText()), a, "{\"qtype\":\"" + questions(a, id, "").get(1).get("qtype").asText() + "\"}"));
+        assertThat(same.get("reviewStatus").asText()).as("the same type again changes nothing").isEqualTo("PENDING");
     }
 
     // ------------------------------------------------------------------ roles and tenancy

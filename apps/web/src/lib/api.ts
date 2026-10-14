@@ -161,6 +161,82 @@ export interface TracePage {
   nextCursor?: string
 }
 
+export type QuestionType = 'FACTUAL' | 'NUMERIC' | 'MULTI_HOP' | 'COMPARISON' | 'UNANSWERABLE'
+export type ReviewStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EDITED'
+export type TestSetStatus = 'GENERATING' | 'DRAFT' | 'FINAL' | 'FAILED'
+export type QualityFlag = 'COPY_RISK' | 'AMBIGUOUS' | 'LOW_ANSWERABILITY' | 'DUPLICATE'
+
+export interface TestSetStats {
+  total: number
+  pending: number
+  accepted: number
+  edited: number
+  rejected: number
+  /** (accepted + edited) / reviewed; absent until something has been reviewed. */
+  acceptanceRate?: number
+  byType: Record<string, number>
+  byFlag: Record<string, number>
+}
+export interface TestSet {
+  id: string
+  name: string
+  version: number
+  parentVersionId?: string
+  status: TestSetStatus
+  targetCount: number
+  generatedCount: number
+  error?: string
+  createdAt: string
+  finalizedAt?: string
+  stats: TestSetStats
+}
+export interface Evidence {
+  documentId: string
+  title: string
+  charStart: number
+  charEnd: number
+  text: string
+}
+export interface TestQuestion {
+  id: string
+  stableId: string
+  testsetId: string
+  question: string
+  expectedAnswer: string
+  qtype: QuestionType
+  origin: 'SYNTHETIC' | 'MANUAL' | 'FEEDBACK'
+  reviewStatus: ReviewStatus
+  flags: QualityFlag[]
+  evidence: Evidence[]
+  createdAt: string
+}
+export interface SpanInput {
+  documentId: string
+  charStart: number
+  charEnd: number
+}
+export interface GenerateInput {
+  name: string
+  count: number
+  mix?: Record<string, number>
+  documentIds?: string[]
+}
+export interface QuestionPatch {
+  question?: string
+  expectedAnswer?: string
+  reviewStatus?: 'ACCEPTED' | 'REJECTED' | 'PENDING'
+  spans?: SpanInput[]
+  qtype?: QuestionType
+}
+export interface TestSetDiff {
+  testset: string
+  against: string
+  added: TestQuestion[]
+  removed: TestQuestion[]
+  edited: { before: TestQuestion; after: TestQuestion }[]
+  unchanged: number
+}
+
 const csrf = { 'X-Glassbox-CSRF': '1' }
 
 async function toError(res: Response): Promise<ApiError> {
@@ -238,6 +314,19 @@ export const api = {
   deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: 'DELETE' }),
   documentContent: (id: string) => request<DocumentContent>(`/api/documents/${id}/content`),
   trace: (id: string) => request<Trace>(`/api/traces/${id}`),
+  testsets: () => request<TestSet[]>('/api/testsets'),
+  testset: (id: string) => request<TestSet>(`/api/testsets/${id}`),
+  generateTestset: (input: GenerateInput) =>
+    request<{ testset: TestSet; estimatedLlmCalls: number }>('/api/testsets/generate', { method: 'POST', body: JSON.stringify(input) }),
+  testsetQuestions: (id: string) => request<{ items: TestQuestion[]; cursor?: string }>(`/api/testsets/${id}/questions?limit=200`),
+  patchQuestion: (id: string, patch: QuestionPatch) => request<TestQuestion>(`/api/questions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  addQuestion: (testsetId: string, q: { question: string; expectedAnswer: string; qtype: QuestionType; spans: SpanInput[] }) =>
+    request<TestQuestion>(`/api/testsets/${testsetId}/questions`, { method: 'POST', body: JSON.stringify(q) }),
+  bulkAccept: (id: string) => request<{ accepted: number }>(`/api/testsets/${id}/bulk-accept`, { method: 'POST' }),
+  finalizeTestset: (id: string, allowPending: boolean) =>
+    request<TestSet>(`/api/testsets/${id}/finalize`, { method: 'POST', body: JSON.stringify({ allowPending }) }),
+  newTestsetVersion: (id: string) => request<TestSet>(`/api/testsets/${id}/versions`, { method: 'POST' }),
+  testsetDiff: (id: string, against: string) => request<TestSetDiff>(`/api/testsets/${id}/diff?against=${against}`),
   traces: (cursor?: string) => request<TracePage>(`/api/traces?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
 }
 

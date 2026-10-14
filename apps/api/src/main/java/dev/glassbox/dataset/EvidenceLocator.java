@@ -23,12 +23,20 @@ public final class EvidenceLocator {
     /** A half-open character range of the document text. */
     public record Range(int start, int end) {}
 
+    /** A chosen range and how much of the answer's meaning it holds: the share of the answer's content words found in it. */
+    public record Located(Range range, double coverage) {}
+
     /**
      * @param documentText normalized text of the document version
      * @param from         chunk start (inclusive)
      * @param to           chunk end (exclusive)
      */
     public static Optional<Range> locate(String documentText, int from, int to, String expectedAnswer, String question) {
+        return locateWithCoverage(documentText, from, to, expectedAnswer, question).map(Located::range);
+    }
+
+    /** Like {@link #locate}, also saying how well the range covers the answer, so callers can tell evidence from a mere best guess. */
+    public static Optional<Located> locateWithCoverage(String documentText, int from, int to, String expectedAnswer, String question) {
         List<Range> sentences = sentences(documentText, from, to);
         if (sentences.isEmpty()) return Optional.empty();
 
@@ -58,7 +66,8 @@ public final class EvidenceLocator {
             if (gainLeft >= gainRight) lo--; else hi++;
             bestCoverage = coverage(documentText, sentences, lo, hi, target);
         }
-        return Optional.of(new Range(sentences.get(lo).start(), sentences.get(hi).end()));
+        Range range = new Range(sentences.get(lo).start(), sentences.get(hi).end());
+        return Optional.of(new Located(range, Words.overlap(target, Words.all(documentText.substring(range.start(), range.end())))));
     }
 
     private static double coverage(String text, List<Range> s, int lo, int hi, Set<String> target) {

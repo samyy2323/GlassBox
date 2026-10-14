@@ -10,6 +10,7 @@ import dev.glassbox.generate.LlmProvider;
 import dev.glassbox.generate.LlmProvider.Request;
 import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
+import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.retrieval.ChunkingResolver;
 import dev.glassbox.tenancy.Tx;
 import java.util.ArrayList;
@@ -37,6 +38,8 @@ public class GenerateTestsetHandler implements JobHandler {
     private static final double OVERSAMPLE = 1.5;
     private static final int ATTEMPTS_PER_SAMPLE = 3;
     private static final Pattern DIGIT = Pattern.compile("\\d");
+    /** A passage counts as evidence when its chosen sentences hold at least this share of the answer's content words. */
+    static final double MIN_EVIDENCE_COVERAGE = 0.25;
 
     private final Tx tx;
     private final ObjectMapper json;
@@ -44,14 +47,17 @@ public class GenerateTestsetHandler implements JobHandler {
     private final LlmChecks checks;
     private final EmbeddingProviders embedders;
     private final ChunkingResolver chunkings;
+    private final JobQueue queue;
 
-    public GenerateTestsetHandler(Tx tx, ObjectMapper json, LlmProvider llm, LlmChecks checks, EmbeddingProviders embedders, ChunkingResolver chunkings) {
+    public GenerateTestsetHandler(Tx tx, ObjectMapper json, LlmProvider llm, LlmChecks checks, EmbeddingProviders embedders, ChunkingResolver chunkings,
+                                  JobQueue queue) {
         this.tx = tx;
         this.json = json;
         this.llm = llm;
         this.checks = checks;
         this.embedders = embedders;
         this.chunkings = chunkings;
+        this.queue = queue;
     }
 
     @Override
@@ -108,18 +114,26 @@ public class GenerateTestsetHandler implements JobHandler {
 
         Map<UUID, String> texts = new HashMap<>();
         int generated = row.generated();
-        for (int i = row.samplesDone(); i < samples.size() && generated < row.target(); i++) {
-            Sample s = samples.get(i);
-            Optional<QuestionJson.Parsed> parsed = ask(s, seed);
-            boolean stored = false;
-            if (parsed.isPresent()) {
-                stored = store(ws, setId, s, parsed.get(), i + 1, embedder, earlier, texts);
+        Runnable alive = () -> queue.heartbeat(job);
+        try {
+            for (int i = row.samplesDone(); i < samples.size() && generated < row.target(); i++) {
+                Sample s = samples.get(i);
+                alive.run();
+                Optional<QuestionJson.Parsed> parsed = ask(s, seed, alive);
+                boolean stored = false;
+                if (parsed.isPresent()) {
+                    stored = store(ws, setId, s, parsed.get(), i, embedder, earlier, texts, alive);
+                }
+                if (stored) generated++;
+                else {
+                    log.info("testset {}: sample {} ({}) skipped: {}", setId, s.index(), s.type(), parsed.isPresent() ? "no evidence found in the passage" : "the model's reply was not usable");
+                    advance(ws, setId, i, false);
+                }
             }
-            if (stored) generated++;
-            else {
-                log.info("testset {}: sample {} ({}) skipped: {}", setId, s.index(), s.type(), parsed.isPresent() ? "no evidence found in the passage" : "the model's reply was not usable");
-                tx.workspace(ws, null, j -> j.update("UPDATE testsets SET samples_done = ? WHERE id = ?", s.index() + 1, setId));
-            }
+        } catch (LostPlace e) {
+            // Another run of this job moved the test set on while this one was busy with the model. It owns the rest of the work.
+            log.warn("testset {}: another run advanced this test set, stopping this one", setId);
+            return;
         }
         if (generated == 0) finish(ws, setId, "FAILED", "The model did not produce a single usable question.");
         else finish(ws, setId, "DRAFT", null);
@@ -132,8 +146,29 @@ public class GenerateTestsetHandler implements JobHandler {
         finish(job.workspaceId(), setId, "FAILED", "Generation stopped: " + (error == null ? "unknown error" : error));
     }
 
-    private Optional<QuestionJson.Parsed> ask(Sample s, long seed) {
+    /** Thrown when the test set is no longer where this run left it: someone else wrote the next sample. */
+    private static final class LostPlace extends RuntimeException {
+        LostPlace() {
+            super("test set advanced by another run", null, false, false);
+        }
+    }
+
+    /**
+     * Moves the test set past sample {@code at}, but only if it is still at {@code at}. The compare-and-set is what stops two runs
+     * of one job (a reaped lock, a duplicated delivery) from both writing questions.
+     */
+    private boolean advance(UUID ws, UUID setId, int at, boolean added) {
+        return tx.workspace(ws, null, j -> {
+            int n = j.update("UPDATE testsets SET samples_done = ?" + (added ? ", generated_count = generated_count + 1" : "")
+                    + " WHERE id = ? AND samples_done = ? AND status = 'GENERATING'", at + 1, setId, at);
+            if (n == 0) throw new LostPlace();
+            return true;
+        });
+    }
+
+    private Optional<QuestionJson.Parsed> ask(Sample s, long seed, Runnable alive) {
         for (int attempt = 0; attempt < ATTEMPTS_PER_SAMPLE; attempt++) {
+            alive.run();
             int sampleSeed = (int) ((seed + s.index() * 31L + attempt) & 0x7fffffff);
             String raw = llm.complete(new Request(GenerationPrompts.generator(s.type(), s.chunks()), attempt == 0 ? 0.2 : 0.7, 300, true, sampleSeed));
             Optional<QuestionJson.Parsed> parsed = QuestionJson.parse(json, raw);
@@ -144,25 +179,31 @@ public class GenerateTestsetHandler implements JobHandler {
     }
 
     /** Locates evidence, runs the quality checks and saves the question with the progress counters. */
-    private boolean store(UUID ws, UUID setId, Sample s, QuestionJson.Parsed p, int samplesDone, EmbeddingProvider embedder,
-                          List<float[]> earlier, Map<UUID, String> texts) throws Exception {
+    private boolean store(UUID ws, UUID setId, Sample s, QuestionJson.Parsed p, int at, EmbeddingProvider embedder,
+                          List<float[]> earlier, Map<UUID, String> texts, Runnable alive) throws Exception {
         List<GoldSpan> spans = new ArrayList<>();
         List<String> evidence = new ArrayList<>();
         for (Chunk c : s.chunks()) {
             String doc = texts.computeIfAbsent(c.versionId(), v -> versionText(ws, v));
             if (doc == null) return false;
-            var range = EvidenceLocator.locate(doc, c.charStart(), c.charEnd(), p.expectedAnswer(), p.question());
-            if (range.isEmpty()) return false;
-            spans.add(new GoldSpan(c.documentId(), c.versionId(), range.get().start(), range.get().end(),
-                    GoldSpan.snippet(doc, range.get().start(), range.get().end())));
-            evidence.add(doc.substring(range.get().start(), range.get().end()));
+            var located = EvidenceLocator.locateWithCoverage(doc, c.charStart(), c.charEnd(), p.expectedAnswer(), p.question());
+            // A passage that holds none of the answer is not evidence for it (the sampler paired it, the question did not use it).
+            if (located.isEmpty() || located.get().coverage() < MIN_EVIDENCE_COVERAGE) continue;
+            var r = located.get().range();
+            spans.add(new GoldSpan(c.documentId(), c.versionId(), r.start(), r.end(), GoldSpan.snippet(doc, r.start(), r.end())));
+            evidence.add(doc.substring(r.start(), r.end()));
         }
+        if (spans.isEmpty()) return false; // the answer is not in the passage at all: a made-up answer is not a test question
+        // A question meant to need two passages that only used one is a single-passage question, and is labelled as such.
+        boolean downgraded = spans.size() < s.chunks().size();
+        String requested = downgraded ? QuestionSampler.FACTUAL : s.type();
 
         List<String> flags = new ArrayList<>();
         if (QualityFilters.copyRisk(p.question(), evidence)) flags.add(QualityFilters.COPY_RISK);
         boolean ambiguous = QualityFilters.deictic(p.question());
         if (!ambiguous && checks.enabled()) ambiguous = !checks.selfContained(p.question());
         if (ambiguous) flags.add(QualityFilters.AMBIGUOUS);
+        alive.run();
         if (checks.enabled()) {
             String own = checks.answerFrom(p.question(), evidence);
             if (QualityFilters.answerAgreement(p.expectedAnswer(), own) < QualityFilters.ANSWER_AGREEMENT) flags.add(QualityFilters.LOW_ANSWERABILITY);
@@ -172,9 +213,13 @@ public class GenerateTestsetHandler implements JobHandler {
         earlier.add(vector);
 
         String spansJson = json.writeValueAsString(spans);
-        String meta = json.writeValueAsString(Map.of("sampleIndex", s.index(), "sampleType", s.type()));
-        String qtype = label(s.type(), p.expectedAnswer());
+        String meta = json.writeValueAsString(Map.of("sampleIndex", s.index(), "sampleType", s.type(), "downgraded", downgraded));
+        String qtype = label(requested, p.expectedAnswer());
         tx.workspace(ws, null, j -> {
+            // Claim the position first: when another run got here already this throws and nothing is written.
+            int claimed = j.update("UPDATE testsets SET samples_done = ?, generated_count = generated_count + 1 WHERE id = ? AND samples_done = ? AND status = 'GENERATING'",
+                    at + 1, setId, at);
+            if (claimed == 0) throw new LostPlace();
             j.update(con -> {
                 var ps = con.prepareStatement("INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, gold_chunk_spans, "
                         + "qtype, origin, quality_flags, meta) VALUES (?, ?, ?, ?, ?::jsonb, ?, 'SYNTHETIC', ?, ?::jsonb)");
@@ -188,7 +233,6 @@ public class GenerateTestsetHandler implements JobHandler {
                 ps.setString(8, meta);
                 return ps;
             });
-            j.update("UPDATE testsets SET generated_count = generated_count + 1, samples_done = ? WHERE id = ?", s.index() + 1, setId);
             return null;
         });
         return true;

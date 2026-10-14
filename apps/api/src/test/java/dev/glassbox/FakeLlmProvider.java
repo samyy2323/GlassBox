@@ -53,7 +53,7 @@ public class FakeLlmProvider implements LlmProvider {
         }
         if (LAST_SYSTEM_PROMPT.contains("using only the text below")) {
             int from = user.indexOf("Text:\n") + 6, to = user.lastIndexOf("\n\nQuestion:");
-            emit(from >= 6 && to > from ? user.substring(from, to) : "NOT STATED", onToken);
+            emit(from >= 6 && to > from && !user.contains("NOTANSWERABLE") ? user.substring(from, to) : "NOT STATED", onToken);
             return;
         }
         CountDownLatch started = STARTED;

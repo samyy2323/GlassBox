@@ -19,7 +19,7 @@ public class TestSetController {
 
     public record GenerateRequest(String name, Integer count, Map<String, Double> mix, List<UUID> documentIds, Long seed) {}
 
-    public record PatchRequest(String question, String expectedAnswer, String reviewStatus, List<SpanInput> spans) {}
+    public record PatchRequest(String question, String expectedAnswer, String reviewStatus, List<SpanInput> spans, String qtype) {}
 
     public record AddRequest(String question, String expectedAnswer, String qtype, List<SpanInput> spans) {}
 
@@ -65,7 +65,7 @@ public class TestSetController {
 
     @PatchMapping("/questions/{id}")
     public Question patch(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @PathVariable UUID id, @RequestBody PatchRequest r) {
-        return sets.patch(p, WorkspaceService.resolve(p, ws), id, r.question(), r.expectedAnswer(), r.reviewStatus(), r.spans());
+        return sets.patch(p, WorkspaceService.resolve(p, ws), id, r.question(), r.expectedAnswer(), r.reviewStatus(), r.spans(), r.qtype());
     }
 
     @PostMapping("/testsets/{id}/bulk-accept")

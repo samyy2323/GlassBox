@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { pageBlocks, segmentText, type Highlight, type HighlightKind } from '../lib/highlight'
+import { readSelection, type Range } from '../lib/selection'
 
 const MARK: Record<HighlightKind, string> = {
   primary: 'bg-amber-300 text-black shadow-[0_0_0_3px_rgb(252_211_77/0.35)]',
@@ -16,6 +17,8 @@ interface Props {
   /** Increment to scroll to the primary highlight again (e.g. when the same passage is clicked twice). */
   scrollKey?: number
   className?: string
+  /** When set, selecting text in the viewer reports it as a character range of the document (used to pick gold evidence). */
+  onSelect?: (range: Range, documentId: string) => void
 }
 
 /**
@@ -23,7 +26,7 @@ interface Props {
  * text, so a cited passage is marked precisely. (A rendered PDF page would need its text layer matched to ours; see ADR 0004.)
  * Every highlighted piece carries data-start so a selection can be turned back into character offsets.
  */
-export function DocumentViewer({ documentId, highlights, scrollKey, className }: Props) {
+export function DocumentViewer({ documentId, highlights, scrollKey, className, onSelect }: Props) {
   const content = useQuery({ queryKey: queryKeys.documentContent(documentId), queryFn: () => api.documentContent(documentId), staleTime: 5 * 60_000 })
   const root = useRef<HTMLDivElement>(null)
 
@@ -42,7 +45,11 @@ export function DocumentViewer({ documentId, highlights, scrollKey, className }:
   if (text == null) return <p className="text-sm text-muted">This document has not finished processing yet.</p>
 
   return (
-    <div ref={root} className={`overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--glass)] p-5 ${className ?? ''}`}>
+    <div
+      ref={root}
+      className={`overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--glass)] p-5 ${className ?? ''}`}
+      onMouseUp={onSelect ? () => { const r = root.current && readSelection(root.current, text); if (r) onSelect(r, documentId) } : undefined}
+    >
       {blocks.map((b) => (
         <section key={b.start} aria-label={b.page ? `Page ${b.page}` : undefined}>
           {b.page != null && (

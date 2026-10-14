@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Files, LogOut, Moon, Plus, ScanSearch, Search, Sun } from 'lucide-react'
+import { ChevronsUpDown, Files, ListChecks, LogOut, Moon, Plus, ScanSearch, Search, Sun } from 'lucide-react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { groupByDay, useRecentTraces } from '../lib/history'
@@ -57,6 +57,7 @@ export function Sidebar({ open, onClose, onOpenPalette, theme, onToggleTheme }: 
 
         <nav aria-label="Main" className="mt-4 space-y-0.5">
           <NavLink to="/documents" className={navLink} onClick={onClose}><Files className="h-[17px] w-[17px]" /> Library</NavLink>
+          <NavLink to="/testsets" className={navLink} onClick={onClose}><ListChecks className="h-[17px] w-[17px]" /> Test sets</NavLink>
           <NavLink to="/xray" end className={navLink} onClick={onClose}><ScanSearch className="h-[17px] w-[17px]" /> X-Ray</NavLink>
         </nav>
 

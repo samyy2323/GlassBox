@@ -11,4 +11,8 @@ export const queryKeys = {
   /** The X-Ray list: infinite pages of traces. */
   traceList: (workspaceId?: string) => ['trace-list', workspaceId] as const,
   trace: (traceId: string) => ['trace', traceId] as const,
+  testsets: (workspaceId?: string) => ['testsets', workspaceId] as const,
+  testset: (id: string) => ['testset', id] as const,
+  testsetQuestions: (id: string) => ['testset-questions', id] as const,
+  testsetDiff: (id: string, against: string) => ['testset-diff', id, against] as const,
 }

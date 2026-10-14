@@ -61,6 +61,16 @@ class DatasetUnitTest {
         assertThat(text.substring(r.start(), r.end())).isEqualTo("The pump moves 40 litres a minute.");
     }
 
+    @Test
+    void coverageSaysHowMuchOfTheAnswerARangeHolds() {
+        String text = "Pumps must be inspected every 90 days by a certified engineer. Signing in";
+        var relevant = EvidenceLocator.locateWithCoverage(text, 0, text.length(), "Every 90 days by a certified engineer", "How often?").orElseThrow();
+        assertThat(relevant.coverage()).isEqualTo(1.0);
+        var unrelated = EvidenceLocator.locateWithCoverage("Signing in", 0, 10, "Every 90 days by a certified engineer", "How often?").orElseThrow();
+        assertThat(unrelated.coverage()).as("a heading that holds none of the answer").isZero();
+        assertThat(EvidenceLocator.locateWithCoverage("   ", 0, 3, "a", "b")).isEmpty();
+    }
+
     // ------------------------------------------------------------------ QualityFilters
 
     @Test

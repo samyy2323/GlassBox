@@ -171,6 +171,18 @@ class JobQueueTest {
     }
 
     @Test
+    void aHeartbeatKeepsALongRunningJobFromBeingReaped() {
+        UUID ws = newWorkspace();
+        enqueue(ws, "COUNT", "long-running-1");
+        Job job = queue.claim("slow-worker").orElseThrow();
+        tx.worker(j -> j.update("UPDATE jobs SET locked_at = now() - interval '6 minutes'"));
+        queue.heartbeat(job); // the handler reports it is still alive
+        assertThat(queue.reapStale()).as("a job that keeps reporting in is not handed to a second worker").isZero();
+        tx.worker(j -> j.update("UPDATE jobs SET locked_at = now() - interval '6 minutes'"));
+        assertThat(queue.reapStale()).as("without a heartbeat the lock still expires").isEqualTo(1);
+    }
+
+    @Test
     void ordinaryRequestsCannotSeeOtherWorkspacesJobs() {
         UUID a = newWorkspace(), b = newWorkspace();
         enqueue(a, "COUNT", "a-job");
