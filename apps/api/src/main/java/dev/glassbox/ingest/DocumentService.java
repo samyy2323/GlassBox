@@ -106,6 +106,8 @@ public class DocumentService {
             }
             int version = (Integer) rows.get(0).get("version") + 1;
             String path = storage.save(ws, docId, version, filename, data);
+            // Old chunks stay (history, change impact) but are no longer searchable: drop their vectors, flag them.
+            j.update("DELETE FROM embeddings WHERE chunk_id IN (SELECT id FROM chunks WHERE document_id = ?)", docId);
             j.update("UPDATE chunks SET superseded = true WHERE document_id = ?", docId);
             j.update("UPDATE documents SET version = ?, content_hash = ?, source_type = ?, title = ?, size_bytes = ?, "
                     + "status = 'UPLOADED', error = NULL WHERE id = ?", version, hash, type, title(filename), (long) data.length, docId);

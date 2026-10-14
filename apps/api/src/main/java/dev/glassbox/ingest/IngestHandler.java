@@ -3,7 +3,6 @@ package dev.glassbox.ingest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.chunking.Chunker;
 import dev.glassbox.chunking.Chunker.ChunkOut;
-import dev.glassbox.chunking.RecursiveChunker;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.embed.EmbeddingService;
 import dev.glassbox.jobs.Job;
@@ -100,7 +99,7 @@ public class IngestHandler implements JobHandler {
         }
 
         // 3. Chunk and persist.
-        Chunker chunker = new RecursiveChunker(chunkSize, true);
+        Chunker chunker = IngestDefaults.chunker(chunkSize);
         List<ChunkOut> chunks = chunker.chunk(parsed);
         UUID chunkingId = persist(ws, docId, target.versionId(), parsed, chunker, chunks);
 

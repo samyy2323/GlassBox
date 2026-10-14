@@ -71,6 +71,11 @@ public final class TestDb {
         return DriverManager.getConnection(PG.getJdbcUrl(), APP_USER, APP_PW);
     }
 
+    /** The container's superuser: bypasses RLS. Only for proving planner behaviour with and without RLS. */
+    public static Connection superuserConnection() throws SQLException {
+        return DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword());
+    }
+
     public static Connection ownerConnection() throws SQLException {
         return DriverManager.getConnection(PG.getJdbcUrl(), OWNER_USER, OWNER_PW);
     }

@@ -117,17 +117,20 @@ class EmbeddingIngestTest extends ApiTestSupport {
     }
 
     @Test
-    void replacingADocumentEmbedsTheNewVersionAndKeepsOldVectorsForSupersededChunks() throws Exception {
+    void replacingADocumentEmbedsTheNewVersionAndDropsVectorsOfSupersededChunks() throws Exception {
         Account a = register();
         JsonNode d = uploadOk(a, "v.pdf", TestFiles.pdf(pdfText()));
         drainQueue();
-        int v1 = countRows(a, "embeddings");
+        assertThat(countRows(a, "embeddings")).isPositive();
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                 .multipart(org.springframework.http.HttpMethod.PUT, "/api/documents/" + d.get("id").asText())
                 .file(new org.springframework.mock.web.MockMultipartFile("file", "v.pdf", null, TestFiles.pdf(pdfText() + " Updated.")))
                 .header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", a.workspace()));
         drainQueue();
-        assertThat(countRows(a, "embeddings")).isGreaterThan(v1);
-        assertThat(countRows(a, "embeddings")).isEqualTo(countRows(a, "chunks"));
+        // Old chunks are kept (history) but unsearchable: their vectors are gone, the new version's are present.
+        int live = tx.workspace(a.workspace(), null, j -> j.queryForObject("SELECT count(*) FROM chunks WHERE NOT superseded", Integer.class));
+        int superseded = tx.workspace(a.workspace(), null, j -> j.queryForObject("SELECT count(*) FROM chunks WHERE superseded", Integer.class));
+        assertThat(superseded).isPositive();
+        assertThat(countRows(a, "embeddings")).isEqualTo(live);
     }
 }

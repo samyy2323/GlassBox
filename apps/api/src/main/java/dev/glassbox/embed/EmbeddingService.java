@@ -53,13 +53,14 @@ public class EmbeddingService {
         List<Pending> fresh = pending.stream().filter(p -> !source.containsKey(p.hash())).toList();
         if (!reusable.isEmpty()) {
             tx.workspace(ws, null, j -> j.batchUpdate(
-                    "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash) "
-                            + "SELECT ?, workspace_id, model, dim, vector, content_hash FROM embeddings WHERE chunk_id = ? AND model = ? "
+                    "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash, chunking_id) "
+                            + "SELECT ?, workspace_id, model, dim, vector, content_hash, ? FROM embeddings WHERE chunk_id = ? AND model = ? "
                             + "ON CONFLICT DO NOTHING",
                     reusable, 200, (ps, p) -> {
                         ps.setObject(1, p.chunkId());
-                        ps.setObject(2, source.get(p.hash()));
-                        ps.setString(3, model);
+                        ps.setObject(2, chunkingId);
+                        ps.setObject(3, source.get(p.hash()));
+                        ps.setString(4, model);
                     }));
         }
 
@@ -77,7 +78,7 @@ public class EmbeddingService {
         // 3. Store.
         if (!fresh.isEmpty()) {
             tx.workspace(ws, null, j -> j.batchUpdate(
-                    "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash) VALUES (?, ?, ?, ?, ?::vector, ?) "
+                    "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash, chunking_id) VALUES (?, ?, ?, ?, ?::vector, ?, ?) "
                             + "ON CONFLICT DO NOTHING",
                     fresh, 200, (ps, p) -> {
                         ps.setObject(1, p.chunkId());
@@ -86,6 +87,7 @@ public class EmbeddingService {
                         ps.setInt(4, provider.dimension());
                         ps.setString(5, literal(vectors.get(p.hash())));
                         ps.setString(6, p.hash());
+                        ps.setObject(7, chunkingId);
                     }));
         }
         return new Result(total, total - pending.size(), reusable.size(), uniqueByHash.size());

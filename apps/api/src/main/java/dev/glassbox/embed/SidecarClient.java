@@ -13,6 +13,8 @@ import org.springframework.web.client.RestClient;
 public class SidecarClient {
     public record EmbedRequest(List<String> texts, String model) {}
     public record EmbedResponse(String model, int dim, List<List<Double>> embeddings) {}
+    public record RerankRequest(String query, List<String> documents, String model) {}
+    public record RerankResponse(String model, List<Double> scores) {}
 
     private final RestClient http;
     private final int maxAttempts;
@@ -32,5 +34,10 @@ public class SidecarClient {
     public EmbedResponse embed(String model, List<String> texts) {
         return Retry.call("sidecar /embed", maxAttempts, backoff, () -> http.post().uri("/embed")
                 .body(new EmbedRequest(texts, model)).retrieve().body(EmbedResponse.class));
+    }
+
+    public RerankResponse rerank(String model, String query, List<String> documents) {
+        return Retry.call("sidecar /rerank", maxAttempts, backoff, () -> http.post().uri("/rerank")
+                .body(new RerankRequest(query, documents, model)).retrieve().body(RerankResponse.class));
     }
 }

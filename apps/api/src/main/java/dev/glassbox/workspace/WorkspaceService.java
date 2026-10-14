@@ -133,6 +133,11 @@ public class WorkspaceService {
 
     // ------------------------------------------------------------ access control
 
+    /** Checks the caller's role in a workspace in its own short transaction (for endpoints that do not otherwise open one). */
+    public void authorize(Principal p, UUID ws, Role min) {
+        tx.workspace(ws, p.userId(), j -> require(j, p, ws, min));
+    }
+
     /** Which workspace a request targets: bound to the key for API keys, the X-Workspace-Id header for users. */
     public static UUID resolve(Principal p, UUID header) {
         if (p.isApiKey()) {
