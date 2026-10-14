@@ -20,5 +20,42 @@ services:
       timeout: 3s
       retries: 20
 
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment: &app-env
+      GLASSBOX_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-glassbox}
+      GLASSBOX_APP_PASSWORD: ${GLASSBOX_APP_PASSWORD:?set in .env}
+      GLASSBOX_OWNER_PASSWORD: ${GLASSBOX_OWNER_PASSWORD:?set in .env}
+      GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set in .env}
+      GLASSBOX_CORS_ORIGINS: http://localhost:8080
+      SPRING_PROFILES_ACTIVE: api
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: worker
+      SERVER_PORT: "8081"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../apps/web
+    depends_on:
+      - api
+    ports:
+      - "8080:8080"
+
 volumes:
   pgdata:
