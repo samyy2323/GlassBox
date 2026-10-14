@@ -43,13 +43,26 @@ public class Tx {
         return run(null, userId, work);
     }
 
+    /**
+     * Queue-internal work that must see jobs of every workspace (claim, reaper). Never use for tenant data:
+     * only the {@code jobs} policy honours this setting.
+     */
+    public <T> T worker(Function<JdbcTemplate, T> work) {
+        return run(null, null, true, work);
+    }
+
     /** Pre-authentication work (login lookup, registration) through SECURITY DEFINER functions only. */
     public <T> T anonymous(Function<JdbcTemplate, T> work) {
         return run(null, null, work);
     }
 
     private <T> T run(UUID ws, UUID user, Function<JdbcTemplate, T> work) {
+        return run(ws, user, false, work);
+    }
+
+    private <T> T run(UUID ws, UUID user, boolean worker, Function<JdbcTemplate, T> work) {
         return tt.execute(status -> {
+            jdbc.queryForObject("SELECT set_config('app.worker', ?, true)", String.class, worker ? "on" : "");
             jdbc.queryForObject("SELECT set_config('app.workspace_id', ?, true)", String.class,
                     ws == null ? "" : ws.toString());
             jdbc.queryForObject("SELECT set_config('app.user_id', ?, true)", String.class,

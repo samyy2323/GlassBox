@@ -16,6 +16,10 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
   jackson:
     default-property-inclusion: non_null
 
@@ -36,5 +40,15 @@ glassbox:
   refresh:
     ttl: 14d
     secure-cookie: ${GLASSBOX_COOKIE_SECURE:false}
+  storage:
+    dir: ${GLASSBOX_STORAGE_DIR:./data/files}
+  limits:
+    max-documents: 50
+    max-file-bytes: 26214400
+  ingest:
+    chunk-size: 512
+    parse-timeout: 60s
+  worker:
+    concurrency: 2
   cors:
     allowed-origins: ${GLASSBOX_CORS_ORIGINS:http://localhost:5173}

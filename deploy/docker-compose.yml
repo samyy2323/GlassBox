@@ -31,6 +31,9 @@ services:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set in .env}
       GLASSBOX_CORS_ORIGINS: http://localhost:8080
       SPRING_PROFILES_ACTIVE: api
+      GLASSBOX_STORAGE_DIR: /data/files
+    volumes:
+      - files:/data/files
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +48,8 @@ services:
       <<: *app-env
       SPRING_PROFILES_ACTIVE: worker
       SERVER_PORT: "8081"
+    volumes:
+      - files:/data/files
     depends_on:
       api:
         condition: service_healthy
@@ -59,3 +64,4 @@ services:
 
 volumes:
   pgdata:
+  files:

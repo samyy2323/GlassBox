@@ -52,7 +52,7 @@ public class SecurityConfig {
         CorsConfiguration c = new CorsConfiguration();
         c.setAllowedOrigins(Arrays.asList(origins.split(",")));
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        c.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "Idempotency-Key", AuthController.CSRF_HEADER));
+        c.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Workspace-Id", "Idempotency-Key", AuthController.CSRF_HEADER));
         c.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
         s.registerCorsConfiguration("/api/**", c);

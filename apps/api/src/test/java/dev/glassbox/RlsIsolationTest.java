@@ -82,6 +82,18 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO api_keys (workspace_id, key_hash, label) VALUES (?, ?, ?)", ws, "hash-" + canary, canary);
             exec(c, "INSERT INTO provider_keys (workspace_id, provider, encrypted_key) VALUES (?, 'openai', ?)", ws, canary.getBytes());
             exec(c, "INSERT INTO audit_log (workspace_id, actor, action) VALUES (?, ?, 'seed')", ws, canary);
+            // P1 tables
+            UUID doc = UUID.randomUUID(), ver = UUID.randomUUID(), chunking = UUID.randomUUID();
+            exec(c, "INSERT INTO documents (id, workspace_id, title, source_type, content_hash, size_bytes) VALUES (?, ?, ?, 'MD', ?, 1)",
+                    doc, ws, canary, "h-" + canary);
+            exec(c, "INSERT INTO document_versions (id, workspace_id, document_id, version, content_hash, storage_path, normalized_text) "
+                    + "VALUES (?, ?, ?, 1, 'h', 'p', ?)", ver, ws, doc, canary);
+            exec(c, "INSERT INTO sections (workspace_id, document_id, document_version_id, ordinal, char_start, char_end, text) "
+                    + "VALUES (?, ?, ?, 0, 0, 5, ?)", ws, doc, ver, canary);
+            exec(c, "INSERT INTO chunkings (id, workspace_id, strategy, params) VALUES (?, ?, 'fixed', ?::jsonb)", chunking, ws, "{\"c\":\"" + canary + "\"}");
+            exec(c, "INSERT INTO chunks (workspace_id, document_id, document_version_id, chunking_id, ordinal, text, token_count, char_start, char_end) "
+                    + "VALUES (?, ?, ?, ?, 0, ?, 1, 0, 5)", ws, doc, ver, chunking, canary);
+            exec(c, "INSERT INTO jobs (workspace_id, type, payload, idempotency_key) VALUES (?, 'T', ?::jsonb, ?)", ws, "{\"c\":\"" + canary + "\"}", "k-" + canary);
             return null;
         });
     }
@@ -218,6 +230,25 @@ class RlsIsolationTest {
             long hits = countIn(WS_A, userA, "SELECT count(*) FROM " + table + " t WHERE t::text LIKE '%CANARY-B%'");
             assertThat(hits).as("%s leaks workspace B canary", table).isZero();
         }
+    }
+
+    static long countAsWorker(UUID ws, UUID user, String sql, Object... args) throws SQLException {
+        return inContext(ws, user, c -> {
+            try (java.sql.Statement st = c.createStatement()) {
+                st.execute("SELECT set_config('app.worker', 'on', true)");
+            }
+            return count(c, sql, args);
+        });
+    }
+
+    /** The queue's worker mode is the one deliberate cross-tenant read; it must not leak to ordinary requests. */
+    @Test
+    void jobsAreVisibleAcrossWorkspacesOnlyInWorkerMode() throws SQLException {
+        assertThat(countIn(WS_A, userA, "SELECT count(*) FROM jobs WHERE workspace_id = ?", WS_B)).isZero();
+        assertThat(countAsWorker(WS_A, userA, "SELECT count(*) FROM jobs WHERE workspace_id = ?", WS_B)).isEqualTo(1L);
+        // The worker flag unlocks nothing but jobs.
+        assertThat(countAsWorker(WS_A, userA, "SELECT count(*) FROM documents WHERE workspace_id = ?", WS_B)).isZero();
+        assertThat(countAsWorker(WS_A, userA, "SELECT count(*) FROM chunks WHERE workspace_id = ?", WS_B)).isZero();
     }
 
     @Test

@@ -40,6 +40,28 @@ public final class TestDb {
 
     private TestDb() {}
 
+    /** Points a Spring test context at the shared container (runtime role) and a temp storage dir. */
+    public static void register(org.springframework.test.context.DynamicPropertyRegistry r) {
+        r.add("spring.datasource.url", TestDb::url);
+        r.add("spring.datasource.username", () -> APP_USER);
+        r.add("spring.datasource.password", () -> APP_PW);
+        r.add("spring.flyway.url", TestDb::url);
+        r.add("spring.flyway.user", () -> OWNER_USER);
+        r.add("spring.flyway.password", () -> OWNER_PW);
+        r.add("glassbox.jwt.secret", () -> "test-secret-test-secret-test-secret-123");
+        r.add("glassbox.storage.dir", () -> STORAGE.toString());
+    }
+
+    public static final java.nio.file.Path STORAGE;
+
+    static {
+        try {
+            STORAGE = java.nio.file.Files.createTempDirectory("glassbox-test-files");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public static String url() {
         return PG.getJdbcUrl();
     }

@@ -133,6 +133,16 @@ public class WorkspaceService {
 
     // ------------------------------------------------------------ access control
 
+    /** Which workspace a request targets: bound to the key for API keys, the X-Workspace-Id header for users. */
+    public static UUID resolve(Principal p, UUID header) {
+        if (p.isApiKey()) {
+            if (header != null && !header.equals(p.workspaceId())) throw ApiException.notFound("No such workspace");
+            return p.workspaceId();
+        }
+        if (header == null) throw ApiException.badRequest("X-Workspace-Id header is required");
+        return header;
+    }
+
     /**
      * Service-layer role check (RLS enforces tenancy again underneath). Non-members get 404 so that
      * workspace ids cannot be probed.

@@ -25,13 +25,7 @@ import org.springframework.test.web.servlet.MvcResult;
 class AuthApiTest {
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        r.add("spring.datasource.url", TestDb::url);
-        r.add("spring.datasource.username", () -> TestDb.APP_USER);
-        r.add("spring.datasource.password", () -> TestDb.APP_PW);
-        r.add("spring.flyway.url", TestDb::url);
-        r.add("spring.flyway.user", () -> TestDb.OWNER_USER);
-        r.add("spring.flyway.password", () -> TestDb.OWNER_PW);
-        r.add("glassbox.jwt.secret", () -> "test-secret-test-secret-test-secret-123");
+        TestDb.register(r);
     }
 
     @Autowired MockMvc mvc;
