@@ -14,5 +14,10 @@ export const queryKeys = {
   testsets: (workspaceId?: string) => ['testsets', workspaceId] as const,
   testset: (id: string) => ['testset', id] as const,
   testsetQuestions: (id: string) => ['testset-questions', id] as const,
+  experiments: (workspaceId?: string) => ['experiments', workspaceId] as const,
+  experiment: (id: string) => ['experiment', id] as const,
+  experimentResults: (id: string, run: string) => ['experiment-results', id, run] as const,
+  runDiff: (a: string, b: string) => ['run-diff', a, b] as const,
+  calibration: (workspaceId?: string) => ['calibration', workspaceId] as const,
   testsetDiff: (id: string, against: string) => ['testset-diff', id, against] as const,
 }

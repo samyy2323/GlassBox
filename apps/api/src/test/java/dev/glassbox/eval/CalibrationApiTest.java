@@ -35,6 +35,8 @@ class CalibrationApiTest extends EvalApiSupport {
         for (int i = 0; i < ids.size(); i++) {
             int band = i % 10 < 6 ? 0 : i % 10 < 8 ? 1 : 2;
             ObjectNode claims = json.createObjectNode();
+            claims.put("verifier", ClaimVerifier.VERSION);
+            claims.put("rubricVersion", Judge.RUBRIC_VERSION);
             ArrayNode list = claims.putArray("claims");
             ObjectNode claim = list.addObject();
             claim.put("text", "A claim number " + i + " in the answer.");
@@ -204,6 +206,23 @@ class CalibrationApiTest extends EvalApiSupport {
         assertThat(experiment(a, s.experiment()).get("judge").get("metrics").get("correctness").get("status").asText()).isEqualTo("unknown");
         assertThat(metricSummary(summary(a), "correctness").get("n").asInt()).isZero();
         assertThat(metricSummary(summary(a), "correctness").has("kappa")).isFalse();
+    }
+
+    @Test
+    void itemsGradedByAnOlderProcedureAreNotMixedIntoTheCurrentCalibration() throws Exception {
+        Setup s = judgedWorkspace();
+        Account a = s.account();
+        // pretend half of the results were verified by the first version of the procedure and judged under an older rubric
+        List<UUID> old = tx.workspace(a.workspace(), null, j -> j.queryForList("SELECT id FROM run_results ORDER BY id LIMIT 12", UUID.class));
+        for (UUID id : old) {
+            tx.workspace(a.workspace(), null, j -> j.update("UPDATE run_results SET claims = jsonb_set(jsonb_set(claims, '{verifier}', '\"windows-v1\"'), '{rubricVersion}', '\"v0\"') WHERE id = ?", id));
+        }
+        assertThat(sample(a, "faithfulness", 100).get("items")).as("12 results come from another verifier version").hasSize(s.results() - 12);
+        assertThat(sample(a, "correctness", 100).get("items")).as("and from another rubric version").hasSize(s.results() - 12);
+        // results from before versions were recorded count as the first rubric and as a legacy verifier
+        tx.workspace(a.workspace(), null, j -> j.update("UPDATE run_results SET claims = claims - 'verifier' - 'rubricVersion' WHERE id = ?", old.get(0)));
+        assertThat(sample(a, "faithfulness", 100).get("items")).hasSize(s.results() - 12);
+        assertThat(sample(a, "correctness", 100).get("items")).as("an unversioned result is rubric v1, the current one").hasSize(s.results() - 11);
     }
 
     @Test

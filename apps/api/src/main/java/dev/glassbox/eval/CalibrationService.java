@@ -70,7 +70,7 @@ public class CalibrationService {
 
     /** The judge behind a metric: the model for correctness and relevance; the NLI model together with it for faithfulness (claims). */
     public String judgeModel(String metric) {
-        return metric.equals(Metrics.FAITHFULNESS) ? llm.model() + " + " + nli.model() : llm.model();
+        return metric.equals(Metrics.FAITHFULNESS) ? llm.model() + " + " + nli.model() + " (verifier " + ClaimVerifier.VERSION + ")" : llm.model();
     }
 
     /** calibrated: enough labels and kappa at the trusted level. uncalibrated: measured, but short of that. unknown: nothing measured yet. */
@@ -135,6 +135,9 @@ public class CalibrationService {
         for (var row : rows) {
             UUID resultId = (UUID) row.get("id");
             JsonNode claims = readTree((String) row.get("claims"));
+            // an item graded by an older procedure or rubric belongs to that version's calibration, not to this one
+            String graded = metric.equals(Metrics.FAITHFULNESS) ? claims.path("verifier").asText("legacy") : claims.path("rubricVersion").asText("v1");
+            if (!graded.equals(metric.equals(Metrics.FAITHFULNESS) ? ClaimVerifier.VERSION : Judge.RUBRIC_VERSION)) continue;
             if (metric.equals(Metrics.FAITHFULNESS)) {
                 int i = 0;
                 for (JsonNode c : claims.path("claims")) {

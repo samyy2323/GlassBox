@@ -27,7 +27,14 @@ public class ClaimVerifier {
 
     /** {@code citedSupports} is null when the claim cites nothing. {@code premiseLabel} is the context chunk the verdict rests on. */
     public record Checked(String text, List<String> labels, Verdict verdict, String source, double entailment, String premiseLabel,
-                          Boolean citedSupports, String reason) {}
+                          String premise, Boolean citedSupports, String reason) {}
+
+    /**
+     * Version of the verification procedure. Calibration of the faithfulness judge is per version, because the procedure is part of what is being
+     * trusted. windows-v2: each sentence and each pair of neighbouring sentences is checked on its own and the best counts, because the NLI model
+     * scored a claim that appears word for word in a three-sentence premise at 0.03 and the same claim against its own sentence at 0.98.
+     */
+    public static final String VERSION = "windows-v2";
 
     /** NLI scores at or above this make a claim SUPPORTED without asking the judge. */
     static final double CLEAR_SUPPORT = 0.8;
@@ -35,7 +42,7 @@ public class ClaimVerifier {
     static final double CLEAR_NO_SUPPORT = 0.1;
     /** A cited chunk counts as supporting its claim at this entailment. */
     static final double CITATION_SUPPORT = 0.5;
-    private static final int PREMISE_SENTENCES = 3;
+    private static final int WINDOWS = 3;
 
     private final NliProvider nli;
     private final Judge judge;
@@ -47,19 +54,30 @@ public class ClaimVerifier {
 
     private record Premise(String label, String text, boolean cited) {}
 
-    /** The few sentences of a chunk that matter for a claim: a 500-token chunk would be cut off by the model's input window. */
-    static String bestSentences(String chunkText, String claim) {
+    /**
+     * Candidate premises for a claim: single sentences and pairs of neighbouring sentences of the chunk, the few that share most of the claim's
+     * meaningful words (fewer sentences win a tie). A small NLI model judges a short premise far better than a whole chunk.
+     */
+    static List<String> windows(String chunkText, String claim) {
         List<String> sentences = Sentences.split(chunkText);
-        if (sentences.size() <= PREMISE_SENTENCES) return chunkText.strip();
+        if (sentences.isEmpty()) return List.of(chunkText.strip());
         Set<String> want = Words.content(claim);
-        List<Integer> order = new ArrayList<>();
-        for (int i = 0; i < sentences.size(); i++) order.add(i);
-        order.sort(Comparator.comparingDouble((Integer i) -> -Words.overlap(want, Words.all(sentences.get(i)))).thenComparingInt(i -> i));
-        List<Integer> keep = new ArrayList<>(order.subList(0, PREMISE_SENTENCES));
-        keep.sort(null);
-        StringBuilder sb = new StringBuilder();
-        for (int i : keep) sb.append(sb.length() == 0 ? "" : " ").append(sentences.get(i));
-        return sb.toString();
+        record Window(String text, double score, int sentences, int position) {}
+        List<Window> all = new ArrayList<>();
+        for (int i = 0; i < sentences.size(); i++) {
+            all.add(new Window(sentences.get(i), Words.overlap(want, Words.all(sentences.get(i))), 1, i));
+            if (i > 0) {
+                String pair = sentences.get(i - 1) + " " + sentences.get(i);
+                all.add(new Window(pair, Words.overlap(want, Words.all(pair)), 2, i - 1));
+            }
+        }
+        all.sort(Comparator.comparingDouble((Window w) -> -w.score()).thenComparingInt(Window::sentences).thenComparingInt(Window::position));
+        List<String> out = new ArrayList<>();
+        for (Window w : all) {
+            if (!out.contains(w.text())) out.add(w.text());
+            if (out.size() == WINDOWS) break;
+        }
+        return out;
     }
 
     public List<Checked> verify(List<Claim> claims, Context context, Runnable alive) {
@@ -72,10 +90,12 @@ public class ClaimVerifier {
             List<Premise> ps = new ArrayList<>();
             for (String label : claim.labels()) {
                 ContextChunk c = byLabel.get(label);
-                if (c != null) ps.add(new Premise(label, bestSentences(c.chunk().text(), claim.text()), true));
+                if (c != null) for (String w : windows(c.chunk().text(), claim.text())) ps.add(new Premise(label, w, true));
             }
             ContextChunk best = bestMatch(claim.text(), context);
-            if (best != null && ps.stream().noneMatch(p -> p.label().equals(best.label()))) ps.add(new Premise(best.label(), bestSentences(best.chunk().text(), claim.text()), false));
+            if (best != null && ps.stream().noneMatch(p -> p.label().equals(best.label()))) {
+                for (String w : windows(best.chunk().text(), claim.text())) ps.add(new Premise(best.label(), w, false));
+            }
             premises.add(ps);
             for (Premise p : ps) pairs.add(new NliProvider.Pair(p.text(), claim.text()));
         }
@@ -88,7 +108,7 @@ public class ClaimVerifier {
             Claim claim = claims.get(c);
             List<Premise> ps = premises.get(c);
             if (ps.isEmpty()) {
-                out.add(new Checked(claim.text(), claim.labels(), Verdict.UNSUPPORTED, "NO_CONTEXT", 0, null, claim.labels().isEmpty() ? null : Boolean.FALSE, "nothing was retrieved to check it against"));
+                out.add(new Checked(claim.text(), claim.labels(), Verdict.UNSUPPORTED, "NO_CONTEXT", 0, null, null, claim.labels().isEmpty() ? null : Boolean.FALSE, "nothing was retrieved to check it against"));
                 continue;
             }
             int bestIndex = 0;
@@ -123,7 +143,7 @@ public class ClaimVerifier {
                     reason = "the judge's reply could not be read; decided by the NLI score";
                 }
             }
-            out.add(new Checked(claim.text(), claim.labels(), verdict, source, bestEntailment, decisive.label(), citedSupports, reason));
+            out.add(new Checked(claim.text(), claim.labels(), verdict, source, bestEntailment, decisive.label(), decisive.text(), citedSupports, reason));
         }
         return out;
     }

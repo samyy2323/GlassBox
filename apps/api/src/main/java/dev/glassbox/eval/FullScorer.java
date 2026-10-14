@@ -154,6 +154,8 @@ public class FullScorer {
             }
         }
         detail.put("claims", checked);
+        detail.put("verifier", ClaimVerifier.VERSION);
+        detail.put("rubricVersion", Judge.RUBRIC_VERSION);
         detail.put("judge", judged);
 
         UUID traceId = saveTrace(ws, q.text(), answer, abstained, started, spans, result, titles, messages, parsed, promptTokens);

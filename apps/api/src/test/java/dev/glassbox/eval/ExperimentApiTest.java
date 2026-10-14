@@ -87,6 +87,36 @@ class ExperimentApiTest extends EvalApiSupport {
     }
 
     @Test
+    void anExperimentCanMeasureAFixedRandomSampleOfTheQuestions() throws Exception {
+        Account a = accountWithDocs(3, 6);
+        String set = finalTestSet(a, "sampled", 10);
+        int all = ok(send(post("/api/experiments/estimate"), a, "{\"testsetId\":\"" + set + "\",\"configs\":[{\"name\":\"x\"}]}")).get("questions").asInt();
+        assertThat(all).isGreaterThanOrEqualTo(6);
+
+        JsonNode estimate = ok(send(post("/api/experiments/estimate"), a, "{\"testsetId\":\"" + set + "\",\"questionLimit\":3,\"configs\":[{\"name\":\"x\"}]}"));
+        assertThat(estimate.get("questions").asInt()).isEqualTo(3);
+        assertThat(estimate.get("notes").toString()).contains("fixed random sample");
+
+        String body = "\"testsetId\":\"" + set + "\",\"questionLimit\":3,\"configs\":[{\"name\":\"hybrid\"}]";
+        JsonNode first = ok(send(post("/api/experiments"), a, "{\"name\":\"first\"," + body + "}")), second = ok(send(post("/api/experiments"), a, "{\"name\":\"second\"," + body + "}"));
+        drainQueue();
+        List<String> questionsOf = new ArrayList<>();
+        for (JsonNode e : List.of(first, second)) {
+            JsonNode done = experiment(a, e.get("id").asText());
+            assertThat(done.get("questionCount").asInt()).isEqualTo(3);
+            assertThat(done.get("runs").get(0).get("samplesDone").asInt()).isEqualTo(3);
+            List<String> ids = new ArrayList<>();
+            ok(send(get("/api/experiments/" + e.get("id").asText() + "/results?run=" + done.get("runs").get(0).get("id").asText()), a, null)).forEach(r -> ids.add(r.get("questionId").asText()));
+            questionsOf.add(String.join(",", ids));
+        }
+        assertThat(questionsOf.get(0)).as("every experiment with the same limit measures the same questions").isEqualTo(questionsOf.get(1));
+
+        JsonNode large = ok(send(post("/api/experiments/estimate"), a, "{\"testsetId\":\"" + set + "\",\"questionLimit\":500,\"configs\":[{\"name\":\"x\"}]}"));
+        assertThat(large.get("questions").asInt()).as("a limit above the size changes nothing").isEqualTo(all);
+        send(post("/api/experiments/estimate"), a, "{\"testsetId\":\"" + set + "\",\"questionLimit\":0,\"configs\":[{\"name\":\"x\"}]}").andExpect(status().isBadRequest());
+    }
+
+    @Test
     void theEstimateSaysHowManyQuestionsAndCallsWithoutStartingAnything() throws Exception {
         Account a = accountWithDocs(2, 5);
         String set = finalTestSet(a, "estimate", 4);

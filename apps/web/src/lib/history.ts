@@ -6,7 +6,7 @@ import { useWorkspace } from './workspace'
 /** Recent answers, newest first: the sidebar shows them as "recent chats" because every answer is stored as a trace. */
 export function useRecentTraces() {
   const { current } = useWorkspace()
-  return useQuery({ queryKey: queryKeys.recentTraces(current?.id), queryFn: () => api.traces(), enabled: !!current, staleTime: 15_000 })
+  return useQuery({ queryKey: queryKeys.recentTraces(current?.id), queryFn: () => api.traces(undefined, 'CHAT'), enabled: !!current, staleTime: 15_000 })
 }
 
 export interface Group {

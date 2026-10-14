@@ -31,10 +31,11 @@ export default function TestSetReview() {
   const ts = useQuery({
     queryKey: queryKeys.testset(id),
     queryFn: () => api.testset(id),
+    enabled: !!current,
     refetchInterval: (q) => (q.state.data?.status === 'GENERATING' ? 3000 : false),
   })
   const generating = ts.data?.status === 'GENERATING'
-  const qs = useQuery({ queryKey: queryKeys.testsetQuestions(id), queryFn: () => api.testsetQuestions(id), refetchInterval: generating ? 3000 : false })
+  const qs = useQuery({ queryKey: queryKeys.testsetQuestions(id), queryFn: () => api.testsetQuestions(id), enabled: !!current, refetchInterval: generating ? 3000 : false })
   const all = useQuery({ queryKey: queryKeys.testsets(current?.id), queryFn: api.testsets, enabled: !!current })
   const docs = useQuery({ queryKey: queryKeys.documents(current?.id), queryFn: () => api.documents(), enabled: !!current })
 
@@ -146,7 +147,7 @@ export default function TestSetReview() {
     onError: (e) => setNotice(errorText(e, 'Could not create a new version.')),
   })
 
-  if (ts.isLoading || qs.isLoading) {
+  if (ts.isPending || qs.isPending) {
     return <div className="mx-auto w-full max-w-6xl space-y-4 p-6" aria-label="Loading test set"><div className="skeleton h-10 w-72" /><div className="skeleton h-96" /></div>
   }
   if (ts.isError || !set) return <p role="alert" className="p-6 text-sm">This test set could not be found. It may belong to another workspace.</p>

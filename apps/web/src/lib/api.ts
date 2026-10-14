@@ -237,6 +237,178 @@ export interface TestSetDiff {
   unchanged: number
 }
 
+export type ExperimentStatus = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED'
+export type ExperimentMode = 'RETRIEVAL' | 'FULL'
+export type Outcome = 'B_BETTER' | 'A_BETTER' | 'NO_DIFFERENCE'
+export type JudgeStatus = 'calibrated' | 'uncalibrated' | 'unknown'
+
+export interface ConfigInput {
+  name: string
+  mode?: 'VECTOR' | 'KEYWORD' | 'HYBRID'
+  kFused?: number
+  rrfK?: number
+  wVec?: number
+  wKw?: number
+  keywordMatch?: 'ANY' | 'ALL'
+  reranker?: 'NONE' | 'CROSS_ENCODER'
+  topN?: number
+  tokenBudget?: number
+}
+export interface MetricValue {
+  metric: string
+  slice: string
+  method: 'question' | 'cluster'
+  value?: number
+  ciLow?: number
+  ciHigh?: number
+  n: number
+}
+export interface RunSummary {
+  id: string
+  label: string
+  ordinal: number
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED'
+  samplesDone: number
+  config: { retrieval: { mode: string; rrfK: number; wVec: number; wKw: number; kFused: number }; reranker: string; topN: number; tokenBudget: number }
+  metrics: MetricValue[]
+}
+export interface ComparisonRow {
+  metric: string
+  a: number
+  b: number
+  delta: number
+  ciLow: number
+  ciHigh: number
+  p: number
+  pAdjusted: number
+  test: 'mcnemar' | 'permutation'
+  outcome: Outcome
+  verdict: string
+  minDetectable?: number
+  n: number
+}
+export interface RunComparison {
+  runId: string
+  label: string
+  rows: ComparisonRow[]
+}
+export interface JudgeMetric {
+  status: JudgeStatus
+  kappa?: number
+  n?: number
+}
+export interface JudgeInfo {
+  model: string
+  rubricVersion: string
+  generationModel: string
+  nliModel: string
+  sameModelAsGenerator: boolean
+  metrics: Record<string, JudgeMetric>
+  warnings: string[]
+}
+export interface Experiment {
+  id: string
+  testsetId: string
+  testsetName: string
+  testsetVersion: number
+  name: string
+  status: ExperimentStatus
+  kind: string
+  mode: ExperimentMode
+  questionCount: number
+  staleCount: number
+  estimatedCost: Record<string, number>
+  actualCost: Record<string, number>
+  error?: string
+  createdAt: string
+  finishedAt?: string
+  runs: RunSummary[]
+  vsBaseline: RunComparison[]
+  judge?: JudgeInfo
+}
+export interface Estimate {
+  questions: number
+  staleQuestions: number
+  runs: number
+  retrievalCalls: number
+  llmCalls: number
+  estimatedTokens: number
+  estimatedUsd: number
+  notes: string[]
+}
+export interface ExperimentResult {
+  questionId: string
+  question: string
+  qtype: string
+  metrics: Record<string, number>
+  latencyMs?: number
+  failureStage?: string
+  answer?: string
+  traceId?: string
+}
+export interface Flip {
+  questionId: string
+  question: string
+  qtype: string
+  a: number
+  b: number
+  traceA?: string
+  traceB?: string
+}
+export interface RunDiff {
+  runA: string
+  runB: string
+  labelA: string
+  labelB: string
+  questions: number
+  rows: ComparisonRow[]
+  flipMetric: string
+  passToFail: Flip[]
+  failToPass: Flip[]
+}
+export type JudgedMetric = 'faithfulness' | 'correctness' | 'relevance'
+export interface CalibrationItem {
+  labelId: string
+  metric: JudgedMetric
+  itemKey: string
+  question: string
+  expectedAnswer?: string
+  answer?: string
+  claim?: string
+  evidence?: string
+  options: string[]
+}
+export interface CalibrationSample {
+  metric: JudgedMetric
+  size: number
+  stillUnlabeled: number
+  target: number
+  items: CalibrationItem[]
+}
+export interface CalibrationMetric {
+  metric: JudgedMetric
+  judgeModel: string
+  rubricVersion: string
+  n: number
+  agreement?: number
+  kappa?: number
+  status: JudgeStatus
+  needsMoreLabels: boolean
+  labels: string[]
+  confusion: number[][]
+  precision: Record<string, number>
+  recall: Record<string, number>
+  unlabeled: number
+}
+export interface CalibrationSummary {
+  judgeModel: string
+  rubricVersion: string
+  minimumLabels: number
+  trustedKappa: number
+  metrics: CalibrationMetric[]
+  warnings: string[]
+}
+
 const csrf = { 'X-Glassbox-CSRF': '1' }
 
 async function toError(res: Response): Promise<ApiError> {
@@ -327,7 +499,22 @@ export const api = {
     request<TestSet>(`/api/testsets/${id}/finalize`, { method: 'POST', body: JSON.stringify({ allowPending }) }),
   newTestsetVersion: (id: string) => request<TestSet>(`/api/testsets/${id}/versions`, { method: 'POST' }),
   testsetDiff: (id: string, against: string) => request<TestSetDiff>(`/api/testsets/${id}/diff?against=${against}`),
-  traces: (cursor?: string) => request<TracePage>(`/api/traces?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
+  experiments: () => request<Experiment[]>('/api/experiments'),
+  experiment: (id: string) => request<Experiment>(`/api/experiments/${id}`),
+  estimateExperiment: (testsetId: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number) =>
+    request<Estimate>('/api/experiments/estimate', { method: 'POST', body: JSON.stringify({ testsetId, mode, configs, questionLimit }) }),
+  createExperiment: (testsetId: string, name: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number) =>
+    request<Experiment>('/api/experiments', { method: 'POST', body: JSON.stringify({ testsetId, name, mode, configs, questionLimit }) }),
+  cancelExperiment: (id: string) => request<void>(`/api/experiments/${id}/cancel`, { method: 'POST' }),
+  experimentResults: (id: string, run: string) => request<ExperimentResult[]>(`/api/experiments/${id}/results?run=${run}`),
+  compareRuns: (a: string, b: string) => request<RunDiff>(`/api/experiments/compare?a=${a}&b=${b}`),
+  calibrationSummary: () => request<CalibrationSummary>('/api/calibration/summary'),
+  calibrationSample: (metric: JudgedMetric, size = 40) =>
+    request<CalibrationSample>('/api/calibration/sample', { method: 'POST', body: JSON.stringify({ metric, size }) }),
+  calibrationLabels: (labels: { labelId: string; humanLabel: string }[]) =>
+    request<CalibrationMetric[]>('/api/calibration/labels', { method: 'POST', body: JSON.stringify({ labels }) }),
+  traces: (cursor?: string, kind?: 'CHAT' | 'EXPERIMENT') =>
+    request<TracePage>(`/api/traces?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${kind ? `&kind=${kind}` : ''}`),
 }
 
 /** Reads a server-sent event stream from a fetch response and calls onEvent for each frame. Resolves when it ends. */

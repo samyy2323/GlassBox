@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.*;
 public class ExperimentController {
     private static final String WS = "X-Workspace-Id";
 
-    public record EstimateRequest(UUID testsetId, String mode, List<ConfigInput> configs) {}
+    public record EstimateRequest(UUID testsetId, String mode, List<ConfigInput> configs, Integer questionLimit) {}
 
-    public record CreateRequest(UUID testsetId, String name, String mode, List<ConfigInput> configs) {}
+    public record CreateRequest(UUID testsetId, String name, String mode, List<ConfigInput> configs, Integer questionLimit) {}
 
     private final ExperimentService experiments;
 
@@ -28,13 +28,13 @@ public class ExperimentController {
 
     @PostMapping("/estimate")
     public Estimate estimate(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @RequestBody EstimateRequest r) {
-        return experiments.estimate(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.configs(), r.mode());
+        return experiments.estimate(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.configs(), r.mode(), r.questionLimit());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ExperimentView create(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @RequestBody CreateRequest r) {
-        return experiments.create(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.name(), r.mode(), r.configs());
+        return experiments.create(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.name(), r.mode(), r.configs(), r.questionLimit());
     }
 
     @GetMapping

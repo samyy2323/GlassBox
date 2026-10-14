@@ -88,13 +88,16 @@ public class TraceService {
         });
     }
 
-    public Page list(Principal p, UUID ws, int limit, String cursor) {
+    /** {@code kind} (CHAT or EXPERIMENT) limits the list to one origin; null lists everything. */
+    public Page list(Principal p, UUID ws, int limit, String cursor, String kind) {
         int size = Math.max(1, Math.min(limit, 100));
+        if (kind != null && !kind.equals("CHAT") && !kind.equals("EXPERIMENT")) throw ApiException.badRequest("kind must be CHAT or EXPERIMENT");
+        String only = kind == null ? "" : " AND kind = '" + kind + "'"; // checked above: only the two literals can get here
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.VIEWER);
             List<Summary> rows;
             if (cursor == null || cursor.isBlank()) {
-                rows = j.query("SELECT " + SUMMARY_COLS + " FROM traces ORDER BY created_at DESC, id DESC LIMIT ?", SUMMARY, size + 1);
+                rows = j.query("SELECT " + SUMMARY_COLS + " FROM traces WHERE true" + only + " ORDER BY created_at DESC, id DESC LIMIT ?", SUMMARY, size + 1);
             } else {
                 Instant at;
                 UUID id;
@@ -105,7 +108,7 @@ public class TraceService {
                 } catch (RuntimeException e) {
                     throw ApiException.badRequest("Invalid cursor");
                 }
-                rows = j.query("SELECT " + SUMMARY_COLS + " FROM traces WHERE (created_at, id) < (?::timestamptz, ?) "
+                rows = j.query("SELECT " + SUMMARY_COLS + " FROM traces WHERE (created_at, id) < (?::timestamptz, ?)" + only + " "
                         + "ORDER BY created_at DESC, id DESC LIMIT ?", SUMMARY, at.toString(), id, size + 1);
             }
             if (rows.size() <= size) return new Page(rows, null);

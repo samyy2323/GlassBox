@@ -35,7 +35,8 @@ public final class ExperimentModel {
     public record ResultView(UUID questionId, String question, String qtype, Map<String, Double> metrics, Integer latencyMs, String failureStage,
                              Object retrieved, Object finalContext, String answer, Object claims, UUID traceId) {}
 
-    public record Flip(UUID questionId, String question, String qtype, double a, double b) {}
+    /** A question that changed sides between two runs, with each run's trace (full runs only) so it can be opened in X-Ray. */
+    public record Flip(UUID questionId, String question, String qtype, double a, double b, UUID traceA, UUID traceB) {}
 
     public record ComparisonView(UUID runA, UUID runB, String labelA, String labelB, int questions, List<Comparisons.Row> rows,
                                  String flipMetric, List<Flip> passToFail, List<Flip> failToPass) {}

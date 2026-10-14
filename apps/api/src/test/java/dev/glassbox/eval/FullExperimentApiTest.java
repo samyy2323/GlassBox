@@ -118,6 +118,23 @@ class FullExperimentApiTest extends EvalApiSupport {
         JsonNode cmp = ok(send(get("/api/experiments/compare?a=" + runId + "&b=" + done.get("runs").get(1).get("id").asText()), a, null));
         assertThat(cmp.get("flipMetric").asText()).isEqualTo("correctness");
         assertThat(cmp.get("rows").size()).isGreaterThan(7);
+
+        // make one question flip: fully correct in the first run, wrong in the second
+        String question = results.get(0).get("questionId").asText();
+        String other = done.get("runs").get(1).get("id").asText();
+        tx.workspace(a.workspace(), null, j -> {
+            j.update("UPDATE run_results SET metrics = jsonb_set(metrics, '{correctness}', '1.0') WHERE run_id = ?::uuid AND question_id = ?::uuid", runId, question);
+            j.update("UPDATE run_results SET metrics = jsonb_set(metrics, '{correctness}', '0.0') WHERE run_id = ?::uuid AND question_id = ?::uuid", other, question);
+            return null;
+        });
+        JsonNode flipped = ok(send(get("/api/experiments/compare?a=" + runId + "&b=" + other), a, null));
+        assertThat(flipped.get("passToFail")).hasSize(1);
+        JsonNode flip = flipped.get("passToFail").get(0);
+        assertThat(flip.get("questionId").asText()).isEqualTo(question);
+        assertThat(flip.get("traceA").asText()).as("each side's X-Ray trace").isNotBlank();
+        assertThat(flip.get("traceB").asText()).isNotEqualTo(flip.get("traceA").asText());
+        assertThat(ok(send(get("/api/traces/" + flip.get("traceB").asText()), a, null)).get("kind").asText()).isEqualTo("EXPERIMENT");
+        assertThat(ok(send(get("/api/experiments/compare?a=" + other + "&b=" + runId), a, null)).get("failToPass")).hasSize(1);
     }
 
     @Test

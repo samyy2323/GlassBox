@@ -169,24 +169,45 @@ class ClaimsUnitTest {
     }
 
     @Test
-    void aLongChunkIsReducedToTheSentencesThatMatterBeforeTheModelSeesIt() {
+    void aChunkIsOfferedToTheModelAsShortWindowsAroundTheSentencesThatMatter() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 30; i++) sb.append("Filler sentence number ").append(i).append(" talks about unrelated things. ");
         sb.append("Pumps must be inspected every 90 days by a certified engineer. ");
         for (int i = 30; i < 60; i++) sb.append("Filler sentence number ").append(i).append(" talks about unrelated things. ");
-        String premise = ClaimVerifier.bestSentences(sb.toString(), "Pumps are inspected every 90 days by an engineer.");
-        assertThat(premise).contains("Pumps must be inspected every 90 days by a certified engineer.");
-        assertThat(Sentences.split(premise)).hasSizeLessThanOrEqualTo(3);
-        assertThat(ClaimVerifier.bestSentences("Short chunk. Two sentences.", "anything")).isEqualTo("Short chunk. Two sentences.");
+        List<String> windows = ClaimVerifier.windows(sb.toString(), "Pumps are inspected every 90 days by an engineer.");
+        assertThat(windows).hasSize(3);
+        assertThat(windows.get(0)).as("the best window is the sentence itself, alone").isEqualTo("Pumps must be inspected every 90 days by a certified engineer.");
+        assertThat(windows).allSatisfy(w -> assertThat(Sentences.split(w)).hasSizeLessThanOrEqualTo(2));
+        assertThat(ClaimVerifier.windows("Only one sentence here.", "anything")).containsExactly("Only one sentence here.");
+        assertThat(ClaimVerifier.windows("", "anything")).containsExactly("");
+        assertThat(ClaimVerifier.windows("First one. Second one.", "second")).as("windows are not repeated").doesNotHaveDuplicates();
+    }
+
+    /** The finding that led to windows: the real NLI model scored a claim that appears word for word in a three-sentence premise at 0.03, and against its own sentence at 0.98. */
+    @Test
+    void aClaimThatIsInTheChunkWordForWordIsFoundEvenWhenTheModelFailsOnLongPremises() {
+        String claim = "Two buddies are named for each person, and refuge areas with an intercom are located on each landing.";
+        String chunk = "Fire Safety Procedure People who need assistance  Employees and visitors who cannot use the stairs unaided have a personal evacuation plan agreed with "
+                + "the fire safety officer. " + claim + " The fire brigade is told about anyone waiting in a refuge area.";
+        // a fragile model: entails only a short premise that contains the claim
+        NliProvider fragile = nli(p -> p.premise().split("\s+").length <= 30 && p.premise().contains(p.hypothesis()) ? entails(0.97) : entails(0.03));
+        ClaimVerifier v = new ClaimVerifier(fragile, judge(u -> "{\"verdict\": \"unsupported\"}"));
+        Checked c = v.verify(List.of(new Claim(claim, List.of("c1"))), context(chunk), () -> { }).get(0);
+        assertThat(c.verdict()).isEqualTo(Verdict.SUPPORTED);
+        assertThat(c.source()).isEqualTo("NLI");
+        assertThat(c.premise()).as("what the model actually saw").isEqualTo(claim);
+        assertThat(c.citedSupports()).isTrue();
+        // the old way, handing the model the whole chunk, would have said unsupported
+        assertThat(fragile.score(List.of(new NliProvider.Pair(chunk, claim))).get(0).entailment()).isLessThan(0.1);
     }
 
     @Test
     void faithfulnessAndCitationPrecisionAreSharesOfTheClaims() {
         List<Checked> checked = List.of(
-                new Checked("a", List.of("c1"), Verdict.SUPPORTED, "NLI", 0.9, "c1", true, ""),
-                new Checked("b", List.of("c2"), Verdict.SUPPORTED, "NLI", 0.9, "c1", false, ""),
-                new Checked("c", List.of(), Verdict.UNSUPPORTED, "NLI", 0.0, "c1", null, ""),
-                new Checked("d", List.of(), Verdict.PARTIAL, "JUDGE", 0.4, "c1", null, ""));
+                new Checked("a", List.of("c1"), Verdict.SUPPORTED, "NLI", 0.9, "c1", "p", true, ""),
+                new Checked("b", List.of("c2"), Verdict.SUPPORTED, "NLI", 0.9, "c1", "p", false, ""),
+                new Checked("c", List.of(), Verdict.UNSUPPORTED, "NLI", 0.0, "c1", "p", null, ""),
+                new Checked("d", List.of(), Verdict.PARTIAL, "JUDGE", 0.4, "c1", "p", null, ""));
         assertThat(ClaimVerifier.faithfulness(checked)).isCloseTo(0.5, within(1e-12));
         assertThat(ClaimVerifier.citationPrecision(checked)).isCloseTo(0.5, within(1e-12));
         assertThat(Optional.of(ClaimVerifier.citationPrecision(List.of(checked.get(2), checked.get(3))))).get().satisfies(d -> assertThat((double) d).isNaN());

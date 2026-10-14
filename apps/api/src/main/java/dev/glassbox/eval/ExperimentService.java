@@ -158,14 +158,20 @@ public class ExperimentService {
         return m;
     }
 
-    public Estimate estimate(Principal p, UUID ws, UUID testsetId, List<ConfigInput> configs, String modeText) {
+    private static void checkLimit(Integer limit) {
+        if (limit != null && (limit < 1 || limit > 10_000)) throw ApiException.badRequest("questionLimit must be between 1 and 10000");
+    }
+
+    public Estimate estimate(Principal p, UUID ws, UUID testsetId, List<ConfigInput> configs, String modeText, Integer questionLimit) {
         String mode = parseMode(modeText);
+        checkLimit(questionLimit);
         List<PipelineConfig> validated = validate(configs);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.VIEWER);
             String status = testsetStatus(j, testsetId);
-            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"));
+            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"), questionLimit);
             List<String> notes = new ArrayList<>();
+            if (questionLimit != null) notes.add("Only a fixed random sample of up to " + questionLimit + " questions is measured, so the intervals are wider.");
             if (!status.equals("FINAL")) notes.add("This test set is " + status.toLowerCase() + ". Only a final version can be measured.");
             if (loaded.stale() > 0) notes.add(loaded.stale() + " question(s) are left out because their document changed since the test set was written.");
             if (loaded.withoutEvidence() > 0 && mode.equals("RETRIEVAL")) notes.add(loaded.withoutEvidence() + " question(s) have no gold evidence (unanswerable) and are not part of retrieval metrics.");
@@ -182,20 +188,21 @@ public class ExperimentService {
         });
     }
 
-    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs) {
+    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs, Integer questionLimit) {
         String mode = parseMode(modeText);
+        checkLimit(questionLimit);
         String cleanName = name == null ? "" : name.strip();
         if (cleanName.isEmpty() || cleanName.length() > 120) throw ApiException.badRequest("An experiment needs a name of 1 to 120 characters");
         List<PipelineConfig> validated = validate(configs);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.EDITOR);
             if (!testsetStatus(j, testsetId).equals("FINAL")) throw ApiException.conflict("Only a final test set can be measured. Finalize it first.");
-            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"));
+            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"), questionLimit);
             if (loaded.questions().isEmpty()) throw ApiException.conflict("This test set has no accepted question with intact evidence to measure");
 
-            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?) RETURNING id", UUID.class,
-                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimateFor(mode, loaded.questions().size(), validated.size())), p.userId());
+            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by, question_limit) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING id", UUID.class,
+                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimateFor(mode, loaded.questions().size(), validated.size())), p.userId(), questionLimit);
             String meta = write(runMeta(mode));
             for (int i = 0; i < validated.size(); i++) {
                 UUID configId = j.queryForObject("INSERT INTO pipeline_configs (workspace_id, config, config_hash) VALUES (?, ?::jsonb, ?) "
@@ -293,12 +300,13 @@ public class ExperimentService {
             String flipMetric = full ? Metrics.CORRECTNESS : RetrievalMetrics.CONTEXT_PASS;
             List<Flip> passToFail = new ArrayList<>(), failToPass = new ArrayList<>();
             Map<UUID, String[]> text = questionText(j, common);
+            Map<UUID, UUID> traceA = traceIds(j, runA), traceB = traceIds(j, runB);
             for (UUID q : common) {
                 Double x = va.get(q).get(flipMetric), y = vb.get(q).get(flipMetric);
                 if (x == null || y == null) continue;
                 boolean passA = full ? x >= 1.0 : x > 0.5, passB = full ? y >= 1.0 : y > 0.5;
                 if (passA == passB) continue;
-                Flip flip = new Flip(q, text.get(q)[0], text.get(q)[1], x, y);
+                Flip flip = new Flip(q, text.get(q)[0], text.get(q)[1], x, y, traceA.get(q), traceB.get(q));
                 if (passA) passToFail.add(flip);
                 else failToPass.add(flip);
             }
@@ -347,6 +355,13 @@ public class ExperimentService {
             y.put(metric, vb);
         }
         return new Aligned(x, y);
+    }
+
+    private Map<UUID, UUID> traceIds(JdbcTemplate j, UUID runId) {
+        Map<UUID, UUID> out = new LinkedHashMap<>();
+        j.query("SELECT question_id, trace_id FROM run_results WHERE run_id = ? AND trace_id IS NOT NULL",
+                rs -> { out.put(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)); }, runId);
+        return out;
     }
 
     private Map<UUID, String[]> questionText(JdbcTemplate j, List<UUID> ids) {

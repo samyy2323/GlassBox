@@ -62,6 +62,27 @@ class TraceApiTest extends ApiTestSupport {
     }
 
     @Test
+    void theListCanBeLimitedToChatConversations() throws Exception {
+        Account a = accountWithDoc("# Pumps\n\nAll pumps must be inspected every ninety days. " + UUID.randomUUID());
+        chat(a, a.workspace(), "how often are pumps inspected");
+        traceService.save(a.workspace(), null, "EXPERIMENT", dev.glassbox.trace.TraceModel.Status.OK, "an experiment answer", "answer", "fake-llm", 5, List.of(),
+                new dev.glassbox.trace.TraceModel.TraceData(null, List.of(), null, null, List.of(), List.of(), null, null));
+
+        JsonNode all = json.readTree(mvc.perform(get("/api/traces").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", a.workspace()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        JsonNode chats = json.readTree(mvc.perform(get("/api/traces?kind=CHAT").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", a.workspace()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        JsonNode experiments = json.readTree(mvc.perform(get("/api/traces?kind=EXPERIMENT").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", a.workspace()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(all.get("items")).hasSize(2);
+        assertThat(chats.get("items")).hasSize(1);
+        assertThat(chats.get("items").get(0).get("kind").asText()).isEqualTo("CHAT");
+        assertThat(experiments.get("items")).hasSize(1);
+        assertThat(experiments.get("items").get(0).get("question").asText()).isEqualTo("an experiment answer");
+        mvc.perform(get("/api/traces?kind=NOPE").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", a.workspace())).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void anAbstainedQuestionIsTracedWithoutAPrompt() throws Exception {
         Account empty = register();
         JsonNode t = getTrace(empty, traceIdOf(chat(empty, empty.workspace(), "anything")));

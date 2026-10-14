@@ -27,7 +27,8 @@ public class TraceController {
 
     @GetMapping
     public Page list(@AuthenticationPrincipal Principal p, @RequestHeader(value = "X-Workspace-Id", required = false) UUID ws,
-                     @RequestParam(defaultValue = "30") int limit, @RequestParam(required = false) String cursor) {
-        return traces.list(p, WorkspaceService.resolve(p, ws), limit, cursor);
+                     @RequestParam(defaultValue = "30") int limit, @RequestParam(required = false) String cursor,
+                     @RequestParam(required = false) String kind) {
+        return traces.list(p, WorkspaceService.resolve(p, ws), limit, cursor, kind);
     }
 }

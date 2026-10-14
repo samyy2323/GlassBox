@@ -100,6 +100,28 @@ class EvalUnitTest {
         assertThat(m.keySet()).containsExactlyElementsOf(RetrievalMetrics.ALL);
     }
 
+    // ------------------------------------------------------------------ sampling
+
+    static List<MeasurableQuestions.Question> questions(int n) {
+        List<MeasurableQuestions.Question> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) out.add(new MeasurableQuestions.Question(new UUID(7, i * 7919L + 13), "FACTUAL", "q" + i, "a", List.of()));
+        return out;
+    }
+
+    @Test
+    void aSampleIsFixedByTheQuestionIdsAndKeepsTestSetOrder() {
+        List<MeasurableQuestions.Question> all = questions(40);
+        List<MeasurableQuestions.Question> a = MeasurableQuestions.sample(all, 10), b = MeasurableQuestions.sample(new ArrayList<>(all), 10);
+        assertThat(a).hasSize(10).isEqualTo(b);
+        assertThat(a.stream().map(MeasurableQuestions.Question::text).distinct()).hasSize(10);
+        List<Integer> positions = a.stream().map(q -> all.indexOf(q)).toList();
+        assertThat(positions).as("in the order of the test set").isSorted();
+        assertThat(positions.get(positions.size() - 1)).as("spread over the set, not just its start").isGreaterThan(10);
+        assertThat(MeasurableQuestions.sample(all, 40)).isSameAs(all);
+        assertThat(MeasurableQuestions.sample(all, 100)).isSameAs(all);
+        assertThat(MeasurableQuestions.sample(all, 1)).hasSize(1);
+    }
+
     // ------------------------------------------------------------------ aggregates
 
     static RunAggregates.Score score(String type, int cluster, double pass, long latency) {

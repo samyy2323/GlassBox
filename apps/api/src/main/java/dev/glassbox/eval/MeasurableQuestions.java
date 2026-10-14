@@ -36,6 +36,14 @@ final class MeasurableQuestions {
     }
 
     static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable) {
+        return load(j, json, testsetId, includeUnanswerable, null);
+    }
+
+    /**
+     * @param limit when set and smaller than the number of questions, a fixed random sample of that size. The choice depends only on the question ids,
+     *              so every run of an experiment, and a resumed job, measures exactly the same questions.
+     */
+    static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable, Integer limit) {
         record Row(UUID id, String qtype, String question, String expected, String spans) {}
         List<Row> rows = j.query("SELECT id, qtype, question, expected_answer, gold_chunk_spans::text AS spans FROM test_questions "
                 + "WHERE testset_id = ? AND review_status IN ('ACCEPTED', 'EDITED') ORDER BY seq",
@@ -73,6 +81,24 @@ final class MeasurableQuestions {
             if (ok) fresh.add(q);
             else stale++;
         }
-        return new Loaded(fresh, stale, withoutEvidence);
+        return new Loaded(limit == null ? fresh : sample(fresh, limit), stale, withoutEvidence);
+    }
+
+    /** The first {@code limit} questions in an order that looks random but is fixed by the ids, put back in test set order. */
+    static List<Question> sample(List<Question> questions, int limit) {
+        if (limit >= questions.size()) return questions;
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) order.add(i);
+        order.sort(java.util.Comparator.comparingLong((Integer i) -> mix(questions.get(i).id())));
+        List<Integer> keep = new ArrayList<>(order.subList(0, limit));
+        keep.sort(null);
+        List<Question> out = new ArrayList<>();
+        for (int i : keep) out.add(questions.get(i));
+        return out;
+    }
+
+    private static long mix(UUID id) {
+        long x = (id.getMostSignificantBits() ^ id.getLeastSignificantBits()) * 0x9E3779B97F4A7C15L;
+        return x ^ (x >>> 29);
     }
 }

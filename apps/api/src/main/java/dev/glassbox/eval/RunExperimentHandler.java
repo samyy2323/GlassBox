@@ -62,7 +62,7 @@ public class RunExperimentHandler implements JobHandler {
         return TYPE;
     }
 
-    private record Target(UUID id, UUID testsetId, String status, String mode) {}
+    private record Target(UUID id, UUID testsetId, String status, String mode, Integer limit) {}
 
     private record RunRow(UUID id, String label, String status, String config) {}
 
@@ -70,14 +70,15 @@ public class RunExperimentHandler implements JobHandler {
     public void handle(Job job) throws Exception {
         UUID ws = job.workspaceId();
         UUID experimentId = UUID.fromString(job.payload().get("experimentId").asText());
-        Target target = tx.workspace(ws, null, j -> j.query("SELECT id, testset_id, status, mode FROM experiments WHERE id = ?",
-                (rs, n) -> new Target(rs.getObject("id", UUID.class), rs.getObject("testset_id", UUID.class), rs.getString("status"), rs.getString("mode")), experimentId)
+        Target target = tx.workspace(ws, null, j -> j.query("SELECT id, testset_id, status, mode, question_limit FROM experiments WHERE id = ?",
+                (rs, n) -> new Target(rs.getObject("id", UUID.class), rs.getObject("testset_id", UUID.class), rs.getString("status"), rs.getString("mode"),
+                        (Integer) rs.getObject("question_limit")), experimentId)
                 .stream().findFirst().orElse(null));
         if (target == null || !(target.status().equals("QUEUED") || target.status().equals("RUNNING"))) return;
         tx.workspace(ws, null, j -> j.update("UPDATE experiments SET status = 'RUNNING' WHERE id = ? AND status = 'QUEUED'", experimentId));
         boolean full = target.mode().equals("FULL");
 
-        MeasurableQuestions.Loaded loaded = tx.workspace(ws, null, j -> MeasurableQuestions.load(j, json, target.testsetId(), full));
+        MeasurableQuestions.Loaded loaded = tx.workspace(ws, null, j -> MeasurableQuestions.load(j, json, target.testsetId(), full, target.limit()));
         List<RunRow> runs = tx.workspace(ws, null, j -> j.query("SELECT r.id, r.label, r.status, c.config::text AS config FROM runs r JOIN pipeline_configs c ON c.id = r.config_id "
                 + "WHERE r.experiment_id = ? ORDER BY r.ordinal", (rs, n) -> new RunRow(rs.getObject("id", UUID.class), rs.getString("label"), rs.getString("status"),
                 rs.getString("config")), experimentId));
