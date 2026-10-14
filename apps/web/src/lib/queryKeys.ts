@@ -1,0 +1,14 @@
+// Every TanStack Query key in one place. Two queries that share a key share one cache entry, so they must return the same
+// shape of data: the sidebar's plain "recent traces" page and the X-Ray list's infinite pages once collided and crashed the
+// page. Give each differently shaped query its own root key here.
+
+export const queryKeys = {
+  workspaces: () => ['workspaces'] as const,
+  documents: (workspaceId?: string) => ['documents', workspaceId] as const,
+  documentContent: (documentId: string) => ['document-content', documentId] as const,
+  /** The newest page of traces, for the sidebar history and the command palette. */
+  recentTraces: (workspaceId?: string) => ['recent-traces', workspaceId] as const,
+  /** The X-Ray list: infinite pages of traces. */
+  traceList: (workspaceId?: string) => ['trace-list', workspaceId] as const,
+  trace: (traceId: string) => ['trace', traceId] as const,
+}

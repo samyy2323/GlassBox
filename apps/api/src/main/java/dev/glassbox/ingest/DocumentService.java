@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.tika.Tika;
+import dev.glassbox.parse.FileTypes;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -36,8 +36,6 @@ public class DocumentService {
     public record SectionDto(int ordinal, Integer parentOrdinal, int level, List<String> headingPath, int start, int end) {}
     public record DocumentContent(DocumentDto document, String text, int[] pageStarts, List<SectionDto> sections) {}
 
-    private static final Tika TIKA = new Tika();
-    private static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     private final Tx tx;
     private final JobQueue jobs;
@@ -191,17 +189,16 @@ public class DocumentService {
 
     // ------------------------------------------------------------ helpers
 
-    /** Detects the real type from the bytes (not just the extension) and enforces the size limit. */
+    /** Detects the real type from the bytes (the name only breaks ties) and enforces the size limit. */
     String sniff(String filename, byte[] data) {
         if (data.length == 0) throw ApiException.badRequest("Empty file");
         if (data.length > maxBytes) throw ApiException.tooLarge("File exceeds the 25 MB limit");
-        String detected = TIKA.detect(data, filename);
-        String lower = filename == null ? "" : filename.toLowerCase();
-        if (detected.equals("application/pdf")) return "PDF";
-        if (detected.equals(DOCX)) return "DOCX";
-        if (detected.equals("text/html") || detected.equals("application/xhtml+xml")) return "HTML";
-        if (detected.startsWith("text/") && (lower.endsWith(".md") || lower.endsWith(".markdown"))) return "MD";
-        throw ApiException.unsupportedMediaType("Unsupported file type (" + detected + "). Use PDF, DOCX, Markdown or HTML.");
+        try {
+            return FileTypes.classify(filename, data).orElseThrow(() -> ApiException.unsupportedMediaType(
+                    "Glassbox could not recognise this file as text, a document, a spreadsheet, a presentation, an e-book or a data file."));
+        } catch (FileTypes.NotSupported e) {
+            throw ApiException.unsupportedMediaType(e.getMessage());
+        }
     }
 
     static String title(String filename) {

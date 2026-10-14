@@ -11,9 +11,15 @@ public class HtmlParser implements DocumentParser {
 
     @Override
     public ParsedDocument parse(byte[] data) {
-        Document doc = Jsoup.parse(new String(data, StandardCharsets.UTF_8));
-        doc.select("script,style,noscript,template,nav,footer").remove();
         TextBuilder tb = new TextBuilder();
+        appendTo(tb, TextDecoding.decode(data));
+        return DocumentParser.nonEmpty(tb, "HTML");
+    }
+
+    /** Adds the readable blocks of one HTML document to the builder (also used chapter by chapter for EPUB). */
+    static void appendTo(TextBuilder tb, String html) {
+        Document doc = Jsoup.parse(html);
+        doc.select("script,style,noscript,template,nav,footer").remove();
         for (Element e : doc.select(BLOCKS)) {
             // Take the outermost block only (a <p> inside an <li> is part of the list item).
             if (e.parents().stream().anyMatch(p -> p.is(BLOCKS))) continue;
@@ -28,6 +34,5 @@ public class HtmlParser implements DocumentParser {
                 }, tag.equals("tr") ? String.join(" | ", e.select("th,td").eachText()) : e.text());
             }
         }
-        return DocumentParser.nonEmpty(tb, "HTML");
     }
 }

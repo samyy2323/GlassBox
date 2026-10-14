@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.glassbox.MoreTestFiles;
 import dev.glassbox.TestDb;
 import dev.glassbox.TestFiles;
 import dev.glassbox.jobs.JobWorker;
@@ -173,13 +174,61 @@ class DocumentApiTest extends ApiTestSupport {
     }
 
     @Test
-    void rejectsUnknownTypesEmptyFilesAndMissingWorkspace() throws Exception {
+    void rejectsMediaTheSystemCannotReadWithAReasonEmptyFilesAndMissingWorkspace() throws Exception {
         Account a = register();
-        upload(a, "notes.txt", "just text".getBytes()).andExpect(status().isUnsupportedMediaType());
-        upload(a, "image.png", new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}).andExpect(status().isUnsupportedMediaType());
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 'I', 'H', 'D', 'R'};
+        upload(a, "image.png", png).andExpect(status().isUnsupportedMediaType()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("OCR")));
+        upload(a, "talk.mp3", new byte[] {'I', 'D', '3', 3, 0, 0, 0, 0, 0, 0x21, 0x54, 'I', '2', 0, 0, 0, 0, 0, 0, 0})
+                .andExpect(status().isUnsupportedMediaType()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("transcription")));
+        upload(a, "bundle.zip", MoreTestFiles.zip(java.util.Map.of("a.txt", "x"))).andExpect(status().isUnsupportedMediaType());
+        byte[] noise = new byte[3000];
+        new java.util.Random(3).nextBytes(noise);
+        noise[5] = 0;
+        upload(a, "mystery.bin", noise).andExpect(status().isUnsupportedMediaType());
         upload(a, "empty.pdf", new byte[0]).andExpect(status().isBadRequest());
         mvc.perform(multipart("/api/documents").file(new MockMultipartFile("file", "a.pdf", null, TestFiles.pdf(pdfText())))
                 .header("Authorization", "Bearer " + a.token())).andExpect(status().isBadRequest());
+    }
+
+    /** Every supported family goes through the real upload, queue, parser, chunker and indexer, and its text is searchable. */
+    @Test
+    void everySupportedFormatIsIngestedAndItsTextIsSearchable() throws Exception {
+        Account a = register();
+        String salt = UUID.randomUUID().toString().substring(0, 8);
+        record Case(String name, byte[] data, String expectedType, String expectedText) {}
+        List<Case> cases = List.of(
+                new Case("notes.txt", ("Plain note about turbines " + salt).getBytes(StandardCharsets.UTF_8), "TXT", "Plain note about turbines"),
+                new Case("Main.java", ("class Valve { /* pressure relief " + salt + " */ }").getBytes(StandardCharsets.UTF_8), "TXT", "pressure relief"),
+                new Case("plans.csv", ("Plan,Price\nBasic" + salt + ",10\nTeam,40\n").getBytes(StandardCharsets.UTF_8), "CSV", "Plan: Team; Price: 40"),
+                new Case("config.json", ("{\"service\":\"billing" + salt + "\",\"limits\":{\"rate\":100}}").getBytes(StandardCharsets.UTF_8), "JSON", "limits.rate: 100"),
+                new Case("feed.xml", ("<root><owner>Dana" + salt + "</owner></root>").getBytes(StandardCharsets.UTF_8), "XML", "owner: Dana"),
+                new Case("memo.rtf", MoreTestFiles.RTF.replace("autumn", "autumn" + salt).getBytes(StandardCharsets.UTF_8), "RTF", "Boilers are checked every autumn"),
+                new Case("prices.xlsx", MoreTestFiles.xlsx(), "XLSX", "Plan: Team; Price: 40; Seats: 5"),
+                new Case("legacy.xls", MoreTestFiles.xls(), "XLS", "Plan: Team; Price: 40; Seats: 5"),
+                new Case("deck.pptx", MoreTestFiles.pptx(), "PPTX", "Incidents fell by 40 percent"),
+                new Case("old.ppt", MoreTestFiles.ppt(), "PPT", "forklift training"),
+                new Case("handbook.odt", MoreTestFiles.odt(), "ODF", "Valves are serviced every six months"),
+                new Case("novel.epub", MoreTestFiles.epub(), "EPUB", "It ends at the lighthouse"),
+                new Case("rules.docx", TestFiles.docx(), "DOCX", "Goggles are required near grinders"),
+                new Case("billing.html", (TestFiles.HTML + "<p>" + salt + "</p>").getBytes(StandardCharsets.UTF_8), "HTML", "First notice after 7 days"),
+                new Case("guide.md", (TestFiles.MARKDOWN + "\n" + salt + "\n").getBytes(StandardCharsets.UTF_8), "MD", "second step"),
+                new Case("policy.pdf", TestFiles.pdf("Policy text for " + salt + " about scaffolding"), "PDF", "about scaffolding"));
+
+        for (Case c : cases) {
+            JsonNode d = uploadOk(a, c.name(), c.data());
+            assertThat(d.get("sourceType").asText()).as(c.name()).isEqualTo(c.expectedType());
+        }
+        drainQueue();
+
+        List<String> chunkTexts = tx.workspace(a.workspace(), null, j -> j.queryForList("SELECT text FROM chunks", String.class));
+        String all = String.join("\n", chunkTexts);
+        JsonNode page = json.readTree(mvc.perform(get("/api/documents?limit=50").header("Authorization", "Bearer " + a.token())
+                .header("X-Workspace-Id", a.workspace())).andReturn().getResponse().getContentAsString());
+        for (JsonNode d : page.get("items")) {
+            assertThat(d.get("status").asText()).as("%s should be READY (error: %s)", d.get("title").asText(), d.path("error").asText()).isEqualTo("READY");
+        }
+        for (Case c : cases) assertThat(all).as("text of %s is searchable", c.name()).contains(c.expectedText());
+        assertThat(all).as("hidden spreadsheet sheets are not indexed").doesNotContain("hidden sheet text");
     }
 
     // ------------------------------------------------------------ access control

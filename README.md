@@ -8,9 +8,13 @@ Multi-tenant RAG evaluation and auto-tuning platform: upload documents, generate
 | --- | --- |
 | P0 Foundation: tenancy with Postgres row-level security, JWT auth, roles, CI | done |
 | P1 Ingest, retrieve, chat: queue, parsers, chunkers, embeddings, hybrid search, rerank, streaming cited answers | done |
-| P2 X-Ray trace viewer, test sets, review queue | next |
+| P2 X-Ray trace viewer, test sets, review queue | X-Ray done; test sets and review queue next |
 
-What works today: upload PDF, Word, Markdown and HTML; asynchronous ingestion with live status; hybrid (vector + keyword) search fused inside Postgres; optional cross-encoder reranking; streamed answers with clickable citations; an answer that says "not in the documents" instead of guessing; tenant isolation enforced by the database.
+What works today: upload almost any document (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, Markdown, HTML, CSV, JSON, XML, plain text and source code; images, audio and video need OCR or transcription and are refused with a clear reason); asynchronous ingestion with live status; hybrid (vector + keyword) search fused inside Postgres; optional cross-encoder reranking; streamed answers with clickable citations; an answer that says "not in the documents" instead of guessing; tenant isolation enforced by the database.
+
+## The interface
+
+A ChatGPT-style chat with a sidebar of past conversations, live progress while an answer is prepared, clickable citations that open the exact passage in a slide-over, a library of documents with drag-anywhere upload, X-Ray for every answer, and a Ctrl K command palette. It comes in two themes only, black and white, built as frosted glass over soft grey light.
 
 ## Run it
 

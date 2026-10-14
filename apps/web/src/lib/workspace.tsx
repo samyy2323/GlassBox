@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, setWorkspaceId, type Workspace } from './api'
+import { queryKeys } from './queryKeys'
 
 interface WorkspaceState {
   workspaces: Workspace[]
@@ -21,7 +22,7 @@ function remembered(): string | null {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const list = useQuery({ queryKey: ['workspaces'], queryFn: api.workspaces })
+  const list = useQuery({ queryKey: queryKeys.workspaces(), queryFn: api.workspaces })
   const [selected, setSelected] = useState<string | null>(remembered)
 
   const workspaces = useMemo(() => list.data ?? [], [list.data])

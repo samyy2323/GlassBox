@@ -9,8 +9,18 @@ public interface DocumentParser {
         return switch (sourceType) {
             case "PDF" -> new PdfParser();
             case "DOCX" -> new DocxParser();
+            case "DOC" -> new LegacyDocParser();
+            case "XLSX", "XLS" -> new SpreadsheetParser();
+            case "PPTX", "PPT" -> new PresentationParser();
+            case "ODF" -> new OdfParser();
+            case "RTF" -> new RtfParser();
+            case "EPUB" -> new EpubParser();
             case "HTML" -> new HtmlParser();
             case "MD" -> new MarkdownParser();
+            case "CSV" -> new CsvParser();
+            case "JSON" -> new JsonParser();
+            case "XML" -> new XmlParser();
+            case "TXT" -> new TextParser();
             default -> throw new UnsupportedDocumentException("Unsupported type " + sourceType);
         };
     }
