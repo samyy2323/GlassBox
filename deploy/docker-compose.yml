@@ -1,0 +1,24 @@
+# Glassbox self-host stack. Run from the repo root:
+#   cp .env.example .env && docker compose -f deploy/docker-compose.yml --env-file .env up --build
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-glassbox}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in .env}
+      GLASSBOX_OWNER_PASSWORD: ${GLASSBOX_OWNER_PASSWORD:?set in .env}
+      GLASSBOX_APP_PASSWORD: ${GLASSBOX_APP_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-glassbox}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
