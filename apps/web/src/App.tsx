@@ -6,6 +6,8 @@ import { WorkspaceProvider, useWorkspace } from './lib/workspace'
 import Chat from './pages/Chat'
 import Documents from './pages/Documents'
 import Login from './pages/Login'
+import XRay from './pages/XRay'
+import XRayList from './pages/XRayList'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } })
 
@@ -43,6 +45,7 @@ function Shell() {
         <nav aria-label="Main" className="flex gap-1">
           <NavLink to="/documents" className={navClass}>Documents</NavLink>
           <NavLink to="/chat" className={navClass}>Chat</NavLink>
+          <NavLink to="/xray" className={navClass}>X-Ray</NavLink>
         </nav>
         <select aria-label="Workspace" className="input w-auto" value={current?.id ?? ''} onChange={(e) => select(e.target.value)}>
           {workspaces.map((w) => (
@@ -82,6 +85,8 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/documents" element={<Documents />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/xray" element={<XRayList />} />
+              <Route path="/xray/:traceId" element={<XRay />} />
               <Route path="*" element={<Navigate to="/documents" replace />} />
             </Route>
           </Routes>

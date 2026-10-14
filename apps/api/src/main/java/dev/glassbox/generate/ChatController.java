@@ -103,7 +103,7 @@ public class ChatController {
         try {
             executor.submit(() -> {
                 try {
-                    chat.answer(ws, body.question(), options, sink);
+                    chat.answer(ws, p.userId(), body.question(), options, sink);
                 } finally {
                     permit.close();
                     emitter.complete();

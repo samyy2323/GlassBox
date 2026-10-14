@@ -17,8 +17,12 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class RetrievalPipeline {
+    /**
+     * {@code candidates} is the fused list; {@code reranked} is the reranker's full new order of the pool it saw (so X-Ray can
+     * show scores for chunks that were cut); {@code ranked} is its first topN, which is what the context is built from.
+     */
     public record Result(String query, UUID chunkingId, PipelineConfig config, List<Candidate> candidates,
-                         List<Candidate> ranked, Context context, List<Span> spans) {}
+                         List<Candidate> reranked, List<Candidate> ranked, Context context, List<Span> spans) {}
 
     private final ChunkingResolver chunkings;
     private final EmbeddingProviders embeddings;
@@ -53,7 +57,7 @@ public class RetrievalPipeline {
         UUID chunkingId = chunkings.defaultChunkingId(workspaceId).orElse(null);
         if (chunkingId == null) { // nothing ingested yet
             Context empty = contextBuilder.build(List.of(), config.tokenBudget());
-            return new Result(query, null, config, List.of(), List.of(), empty, spans);
+            return new Result(query, null, config, List.of(), List.of(), List.of(), empty, spans);
         }
 
         // Keyword-only search needs no embedding; the SQL still wants a vector of the right size (its branch is LIMIT 0).
@@ -71,7 +75,8 @@ public class RetrievalPipeline {
         t = System.nanoTime();
         Reranker reranker = rerankers.get(config.reranker());
         List<Candidate> pool = candidates.subList(0, Math.min(config.rerankCandidates(), candidates.size()));
-        List<Candidate> ranked = reranker.rerank(query, pool, config.topN());
+        List<Candidate> reranked = reranker.rerank(query, pool, pool.size());
+        List<Candidate> ranked = reranked.subList(0, Math.min(config.topN(), reranked.size()));
         spans.add(span("rerank", t, Map.of("reranker", config.reranker(), "in", pool.size(), "out", ranked.size())));
 
         t = System.nanoTime();
@@ -83,7 +88,7 @@ public class RetrievalPipeline {
         detail.put("budget", context.budget());
         spans.add(span("context", t, detail));
 
-        return new Result(query, chunkingId, config, candidates, ranked, context, spans);
+        return new Result(query, chunkingId, config, candidates, reranked, ranked, context, spans);
     }
 
     private static Span span(String stage, long startNanos, Map<String, Object> detail) {

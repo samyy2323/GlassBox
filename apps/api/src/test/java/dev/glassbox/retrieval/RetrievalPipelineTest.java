@@ -77,6 +77,7 @@ class RetrievalPipelineTest extends ApiTestSupport {
         Corpus c = corpus();
         var r = pipeline.retrieve(c.account().workspace(), "fire extinguishers checked monthly",
                 config().withReranker(Reranker.Type.CROSS_ENCODER).withTopN(2));
+        assertThat(r.reranked()).as("the reranker's whole new order is kept for X-Ray").hasSize(3).startsWith(r.ranked().get(0), r.ranked().get(1));
         assertThat(r.ranked()).hasSize(2);
         assertThat(r.ranked().get(0).documentId()).isEqualTo(c.safety());
         assertThat(r.ranked()).allSatisfy(x -> assertThat(x.rerankScore()).isNotNull());

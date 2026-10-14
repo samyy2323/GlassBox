@@ -21,50 +21,6 @@ import org.springframework.test.web.servlet.MvcResult;
 
 /** POST /api/chat end to end: real retrieval and RLS, fake model. */
 class ChatApiTest extends ApiTestSupport {
-    record Sse(String event, JsonNode data) {}
-
-    @BeforeEach
-    @AfterEach
-    void resetFake() {
-        FakeLlmProvider.reset();
-    }
-
-    org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder chatRequest(Account a, UUID ws, String body) {
-        return post("/api/chat").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", ws)
-                .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM).content(body);
-    }
-
-    List<Sse> parse(String raw) throws Exception {
-        List<Sse> out = new ArrayList<>();
-        for (String frame : raw.split("\n\n")) {
-            String event = null, data = null;
-            for (String line : frame.split("\n")) {
-                if (line.startsWith("event:")) event = line.substring(6).strip();
-                if (line.startsWith("data:")) data = line.substring(5).strip();
-            }
-            if (event != null) out.add(new Sse(event, data == null ? null : json.readTree(data)));
-        }
-        return out;
-    }
-
-    /** Sends a question and returns the whole event stream once the server finishes it. */
-    List<Sse> chat(Account a, UUID ws, String question) throws Exception {
-        MvcResult r = mvc.perform(chatRequest(a, ws, "{\"question\":\"" + question + "\"}")).andExpect(request().asyncStarted()).andReturn();
-        r.getAsyncResult(20_000);
-        return parse(r.getResponse().getContentAsString(StandardCharsets.UTF_8));
-    }
-
-    Account accountWithDoc(String markdown) throws Exception {
-        Account a = register();
-        uploadOk(a, "doc.md", markdown.getBytes(StandardCharsets.UTF_8));
-        drainQueue();
-        return a;
-    }
-
-    List<String> names(List<Sse> events) {
-        return events.stream().map(Sse::event).toList();
-    }
-
     @Test
     void streamsTraceThenTokensThenCitationsThenDone() throws Exception {
         Account a = accountWithDoc("# Pumps\n\nAll pumps must be inspected every ninety days by a certified engineer. " + UUID.randomUUID());

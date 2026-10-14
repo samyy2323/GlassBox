@@ -59,6 +59,8 @@ glassbox:
     max-concurrent: 1
     queue-wait: 2s
     rate-per-minute: 20
+  traces:
+    retention-days: 30
   chat:
     reranker: NONE
     top-n: 5

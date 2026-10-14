@@ -19,6 +19,7 @@ interface Turn {
   abstained?: boolean
   model?: string
   latencyMs?: number
+  traceId?: string
 }
 
 const LABELS = /(\[c\d+(?:\s*,\s*c\d+)*\])/g
@@ -110,6 +111,11 @@ function TurnView({ turn }: { turn: Turn }) {
             </ul>
           </details>
         )}
+        {turn.traceId && (
+          <Link to={`/xray/${turn.traceId}`} className="inline-block text-xs text-indigo-600 hover:underline">
+            Open in X-Ray →
+          </Link>
+        )}
       </div>
     </article>
   )
@@ -160,8 +166,8 @@ export default function Chat() {
         else if (ev.event === 'citations') update(id, (t) => ({ ...t, citations: data.citations, unknownLabels: data.unknown }))
         else if (ev.event === 'done')
           // The server's final text has links and images stripped; it replaces what was streamed.
-          update(id, (t) => ({ ...t, status: 'done', answer: data.answer, sanitized: data.sanitized, abstained: data.abstained, model: data.model, latencyMs: data.latencyMs }))
-        else if (ev.event === 'error') update(id, (t) => ({ ...t, status: 'error', error: data.message }))
+          update(id, (t) => ({ ...t, status: 'done', answer: data.answer, sanitized: data.sanitized, abstained: data.abstained, model: data.model, latencyMs: data.latencyMs, traceId: data.traceId }))
+        else if (ev.event === 'error') update(id, (t) => ({ ...t, status: 'error', error: data.message, traceId: data.traceId }))
       }, ctrl.signal)
       update(id, (t) => (t.status === 'streaming' ? { ...t, status: 'error', error: 'The connection closed before the answer finished.' } : t))
     } catch (err) {

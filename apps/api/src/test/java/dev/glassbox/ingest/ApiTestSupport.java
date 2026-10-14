@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.util.ArrayList;
+import org.springframework.test.web.servlet.MvcResult;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.TestDb;
@@ -99,4 +103,49 @@ public abstract class ApiTestSupport {
         return "Quarterly maintenance policy " + UUID.randomUUID() + ".\n\nAll pumps must be inspected every 90 days.";
     }
 
+
+    /** Every API test starts and ends with a pristine fake model, so a held or failing fake never leaks into the next test. */
+    @org.junit.jupiter.api.BeforeEach
+    @org.junit.jupiter.api.AfterEach
+    void resetFakeModel() {
+        dev.glassbox.FakeLlmProvider.reset();
+    }
+
+    public record Sse(String event, JsonNode data) {}
+
+    protected org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder chatRequest(Account a, UUID ws, String body) {
+        return post("/api/chat").header("Authorization", "Bearer " + a.token()).header("X-Workspace-Id", ws)
+                .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM).content(body);
+    }
+
+    protected List<Sse> parse(String raw) throws Exception {
+        List<Sse> out = new ArrayList<>();
+        for (String frame : raw.split("\n\n")) {
+            String event = null, data = null;
+            for (String line : frame.split("\n")) {
+                if (line.startsWith("event:")) event = line.substring(6).strip();
+                if (line.startsWith("data:")) data = line.substring(5).strip();
+            }
+            if (event != null) out.add(new Sse(event, data == null ? null : json.readTree(data)));
+        }
+        return out;
+    }
+
+    /** Sends a question and returns the whole event stream once the server finishes it. */
+    protected List<Sse> chat(Account a, UUID ws, String question) throws Exception {
+        MvcResult r = mvc.perform(chatRequest(a, ws, "{\"question\":\"" + question + "\"}")).andExpect(request().asyncStarted()).andReturn();
+        r.getAsyncResult(20_000);
+        return parse(r.getResponse().getContentAsString(StandardCharsets.UTF_8));
+    }
+
+    protected Account accountWithDoc(String markdown) throws Exception {
+        Account a = register();
+        uploadOk(a, "doc.md", markdown.getBytes(StandardCharsets.UTF_8));
+        drainQueue();
+        return a;
+    }
+
+    protected List<String> names(List<Sse> events) {
+        return events.stream().map(Sse::event).toList();
+    }
 }

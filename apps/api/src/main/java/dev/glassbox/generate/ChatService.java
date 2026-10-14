@@ -4,16 +4,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.chunking.TokenIndex;
 import dev.glassbox.generate.CitationParser.Parsed;
 import dev.glassbox.rerank.Reranker;
+import dev.glassbox.retrieval.Candidate;
+import dev.glassbox.trace.TraceAssembler;
+import dev.glassbox.trace.TraceModel;
+import dev.glassbox.trace.TraceModel.Status;
+import dev.glassbox.trace.TraceService;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalPipeline;
 import dev.glassbox.retrieval.Span;
 import dev.glassbox.tenancy.Tx;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,12 +48,14 @@ public class ChatService {
     private final CitationParser citations;
     private final AnswerSanitizer sanitizer;
     private final Tx tx;
+    private final TraceService traces;
+    private final TraceAssembler assembler;
     private final String embeddingModel;
     private final double temperature;
     private final int maxTokens;
 
     public ChatService(RetrievalPipeline pipeline, PromptBuilder prompts, LlmProvider llm, CitationParser citations,
-                       AnswerSanitizer sanitizer, Tx tx,
+                       AnswerSanitizer sanitizer, Tx tx, TraceService traces, TraceAssembler assembler,
                        @Value("${glassbox.embed.default-model}") String embeddingModel,
                        @Value("${glassbox.llm.temperature}") double temperature,
                        @Value("${glassbox.llm.max-tokens}") int maxTokens) {
@@ -56,31 +65,44 @@ public class ChatService {
         this.citations = citations;
         this.sanitizer = sanitizer;
         this.tx = tx;
+        this.traces = traces;
+        this.assembler = assembler;
         this.embeddingModel = embeddingModel;
         this.temperature = temperature;
         this.maxTokens = maxTokens;
     }
 
-    /** Runs the turn to completion. The caller owns (and closes) the LLM permit. Never throws: failures become an error event. */
-    public void answer(UUID workspaceId, String question, Options options, Sink sink) {
+    /**
+     * Runs the turn to completion. The caller owns (and closes) the LLM permit. Never throws: failures become an error event.
+     * Every outcome (answered, abstained, failed, cancelled) is saved as a trace so X-Ray can explain it afterwards.
+     */
+    public void answer(UUID workspaceId, UUID userId, String question, Options options, Sink sink) {
         long started = System.nanoTime();
+        List<Span> spans = new ArrayList<>();
+        Consumer<Span> record = span -> {
+            spans.add(span);
+            sink.send("trace", span);
+        };
+        RetrievalPipeline.Result result = null;
+        List<LlmProvider.Message> messages = null;
+        Parsed parsed = null;
+        Map<UUID, String> titles = Map.of();
+        StringBuilder answer = new StringBuilder();
+        int promptTokens = 0;
         try {
             PipelineConfig config = PipelineConfig.defaults(embeddingModel).withReranker(options.reranker())
                     .withTopN(options.topN()).withTokenBudget(options.tokenBudget());
-            var result = pipeline.retrieve(workspaceId, question, config, span -> sink.send("trace", span));
-            Map<UUID, String> titles = titles(workspaceId, result.context().included().stream().map(c -> c.chunk().documentId()).distinct().toList());
+            result = pipeline.retrieve(workspaceId, question, config, record);
+            titles = titles(workspaceId, result.candidates().stream().map(Candidate::documentId).distinct().toList());
 
-            StringBuilder answer = new StringBuilder();
-            int promptTokens = 0;
             long generationStart = System.nanoTime();
-            Long firstToken = null;
             if (result.context().included().isEmpty()) {
                 // Nothing relevant was found: abstain without spending an LLM call.
                 answer.append(PromptBuilder.NOT_IN_DOCUMENTS);
                 sink.send("token", Map.of("t", PromptBuilder.NOT_IN_DOCUMENTS));
-                sink.send("trace", new Span("generation", 0, Map.of("skipped", true, "reason", "no context was retrieved")));
+                record.accept(new Span("generation", 0, Map.of("skipped", true, "reason", "no context was retrieved")));
             } else {
-                var messages = prompts.build(question, result.context(), titles);
+                messages = prompts.build(question, result.context(), titles);
                 promptTokens = messages.stream().mapToInt(m -> TokenIndex.count(m.content())).sum();
                 AtomicBoolean first = new AtomicBoolean(true);
                 long[] ttft = {0};
@@ -90,37 +112,63 @@ public class ChatService {
                     answer.append(token);
                     sink.send("token", Map.of("t", token));
                 });
-                firstToken = ttft[0];
                 Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("model", llm.model());
-                detail.put("timeToFirstTokenMs", firstToken);
+                detail.put("timeToFirstTokenMs", ttft[0]);
                 detail.put("promptTokens", promptTokens);
                 detail.put("answerTokens", TokenIndex.count(answer.toString()));
-                sink.send("trace", new Span("generation", (System.nanoTime() - generationStart) / 1_000_000, detail));
+                record.accept(new Span("generation", (System.nanoTime() - generationStart) / 1_000_000, detail));
             }
 
             var clean = sanitizer.sanitize(answer.toString());
-            Parsed parsed = citations.parse(clean.text(), result.context(), titles);
+            parsed = citations.parse(clean.text(), result.context(), titles);
             sink.send("citations", Map.of("citations", parsed.citations(), "unknown", parsed.unknown()));
+
+            boolean abstained = clean.text().contains(PromptBuilder.NOT_IN_DOCUMENTS);
+            long latencyMs = (System.nanoTime() - started) / 1_000_000;
+            UUID traceId = saveTrace(workspaceId, userId, abstained ? Status.ABSTAINED : Status.OK, question, clean.text(), latencyMs,
+                    spans, result, titles, messages, parsed, promptTokens, null);
 
             Map<String, Object> done = new LinkedHashMap<>();
             done.put("answer", clean.text());
             done.put("sanitized", clean.changed());
-            done.put("abstained", clean.text().contains(PromptBuilder.NOT_IN_DOCUMENTS));
+            done.put("abstained", abstained);
             done.put("model", llm.model());
             done.put("promptTokens", promptTokens);
             done.put("answerTokens", TokenIndex.count(clean.text()));
-            done.put("latencyMs", (System.nanoTime() - started) / 1_000_000);
+            done.put("latencyMs", latencyMs);
+            if (traceId != null) done.put("traceId", traceId);
             sink.send("done", done);
         } catch (LlmProvider.Cancelled cancelled) {
             log.debug("chat cancelled by client");
+            saveTrace(workspaceId, userId, Status.CANCELLED, question, answer.toString(), (System.nanoTime() - started) / 1_000_000,
+                    spans, result, titles, messages, parsed, promptTokens, "cancelled by the client");
         } catch (RuntimeException e) {
             log.warn("chat failed: {}", e.toString());
+            UUID traceId = saveTrace(workspaceId, userId, Status.ERROR, question, answer.toString(), (System.nanoTime() - started) / 1_000_000,
+                    spans, result, titles, messages, parsed, promptTokens, e.toString());
             try {
-                sink.send("error", Map.of("code", "generation_failed", "message", friendly(e)));
+                Map<String, Object> error = new LinkedHashMap<>();
+                error.put("code", "generation_failed");
+                error.put("message", friendly(e));
+                if (traceId != null) error.put("traceId", traceId);
+                sink.send("error", error);
             } catch (RuntimeException ignored) {
                 // client is gone
             }
+        }
+    }
+
+    /** A trace is diagnostic: failing to save one must never fail the answer. */
+    private UUID saveTrace(UUID ws, UUID userId, Status status, String question, String answer, long latencyMs, List<Span> spans,
+                           RetrievalPipeline.Result result, Map<UUID, String> titles, List<LlmProvider.Message> messages, Parsed parsed,
+                           int promptTokens, String error) {
+        try {
+            var data = assembler.assemble(result, titles, messages, parsed, new TraceModel.Usage(promptTokens, TokenIndex.count(answer)), error);
+            return traces.save(ws, userId, "CHAT", status, question, answer, llm.model(), (int) latencyMs, List.copyOf(spans), data);
+        } catch (RuntimeException e) {
+            log.warn("could not save trace: {}", e.toString());
+            return null;
         }
     }
 

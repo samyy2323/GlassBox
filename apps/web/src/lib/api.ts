@@ -76,6 +76,91 @@ export interface TraceSpan {
   detail?: Record<string, unknown>
 }
 
+export interface DocumentSection {
+  ordinal: number
+  parentOrdinal?: number
+  level: number
+  headingPath: string[]
+  start: number
+  end: number
+}
+export interface DocumentContent {
+  document: DocumentDto
+  /** Absent while the document is still being ingested. */
+  text?: string
+  pageStarts: number[]
+  sections: DocumentSection[]
+}
+
+export type TraceStatus = 'OK' | 'ABSTAINED' | 'ERROR' | 'CANCELLED'
+export type Disposition = 'IN_CONTEXT' | 'DROPPED' | 'CUT'
+export interface CandidateView {
+  chunkId: string
+  documentId: string
+  title: string
+  page?: number
+  charStart: number
+  charEnd: number
+  tokenCount: number
+  snippet: string
+  fusedScore: number
+  vecRank?: number
+  vecDistance?: number
+  kwRank?: number
+  kwScore?: number
+  rerankScore?: number
+  rankedPosition?: number
+  disposition: Disposition
+  label?: string
+  reason?: string
+}
+export interface TraceData {
+  config?: {
+    retrieval: { mode: string; model: string; kVec: number; kKw: number; rrfK: number; wVec: number; wKw: number; kFused: number; keywordMatch: string }
+    reranker: string
+    rerankCandidates: number
+    topN: number
+    tokenBudget: number
+  }
+  candidates: CandidateView[]
+  context?: {
+    budget: number
+    tokensUsed: number
+    included: { label: string; chunkId: string; tokenCount: number }[]
+    dropped: { chunkId: string; reason: string; detail: string }[]
+  }
+  prompt?: { role: string; content: string }[]
+  citations: Citation[]
+  unknownCitations: string[]
+  usage?: { promptTokens: number; answerTokens: number }
+  error?: string
+}
+export interface Trace {
+  id: string
+  kind: string
+  status: TraceStatus
+  question: string
+  answer?: string
+  model?: string
+  latencyMs?: number
+  spans: TraceSpan[]
+  data: TraceData
+  createdAt: string
+}
+export interface TraceSummary {
+  id: string
+  kind: string
+  status: TraceStatus
+  question: string
+  model?: string
+  latencyMs?: number
+  createdAt: string
+}
+export interface TracePage {
+  items: TraceSummary[]
+  nextCursor?: string
+}
+
 const csrf = { 'X-Glassbox-CSRF': '1' }
 
 async function toError(res: Response): Promise<ApiError> {
@@ -151,6 +236,9 @@ export const api = {
     return request<UploadResult>('/api/documents', { method: 'POST', body: form })
   },
   deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: 'DELETE' }),
+  documentContent: (id: string) => request<DocumentContent>(`/api/documents/${id}/content`),
+  trace: (id: string) => request<Trace>(`/api/traces/${id}`),
+  traces: (cursor?: string) => request<TracePage>(`/api/traces?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
 }
 
 /** Reads a server-sent event stream from a fetch response and calls onEvent for each frame. Resolves when it ends. */

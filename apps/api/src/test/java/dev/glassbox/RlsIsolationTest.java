@@ -97,6 +97,7 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash, chunking_id) VALUES (?, ?, 'seed-model', 3, '[1,2,3]', ?, ?)",
                     chunk, ws, "hash-" + canary, chunking);
             exec(c, "INSERT INTO jobs (workspace_id, type, payload, idempotency_key) VALUES (?, 'T', ?::jsonb, ?)", ws, "{\"c\":\"" + canary + "\"}", "k-" + canary);
+            exec(c, "INSERT INTO traces (workspace_id, kind, question, answer, data) VALUES (?, 'CHAT', ?, ?, ?::jsonb)", ws, canary, canary, "{\"c\":\"" + canary + "\"}");
             return null;
         });
     }
