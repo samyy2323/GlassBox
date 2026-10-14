@@ -48,7 +48,7 @@ class AuthApiTest {
                 r.getResponse().getCookie("gb_refresh"));
     }
 
-    JsonNode get(String url, String token) throws Exception {
+    JsonNode getJson(String url, String token) throws Exception {
         return json.readTree(mvc.perform(get(url).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
@@ -56,7 +56,7 @@ class AuthApiTest {
     @Test
     void registerCreatesPersonalWorkspaceOwnedByUser() throws Exception {
         Login a = register("owner-" + UUID.randomUUID() + "@example.com");
-        JsonNode ws = get("/api/workspaces", a.token());
+        JsonNode ws = getJson("/api/workspaces", a.token());
         assertThat(ws).hasSize(1);
         assertThat(ws.get(0).get("role").asText()).isEqualTo("OWNER");
     }
@@ -105,7 +105,7 @@ class AuthApiTest {
     void otherUsersCannotSeeOrTouchMyWorkspace() throws Exception {
         Login a = register("a-" + UUID.randomUUID() + "@example.com");
         Login b = register("b-" + UUID.randomUUID() + "@example.com");
-        String wsA = get("/api/workspaces", a.token()).get(0).get("id").asText();
+        String wsA = getJson("/api/workspaces", a.token()).get(0).get("id").asText();
         mvc.perform(get("/api/workspaces/" + wsA + "/members").header("Authorization", "Bearer " + b.token()))
                 .andExpect(status().isNotFound());
         mvc.perform(post("/api/workspaces/" + wsA + "/api-keys").header("Authorization", "Bearer " + b.token())
@@ -118,7 +118,7 @@ class AuthApiTest {
         Login owner = register("owner-" + UUID.randomUUID() + "@example.com");
         String viewerEmail = "viewer-" + UUID.randomUUID() + "@example.com";
         Login viewer = register(viewerEmail);
-        String ws = get("/api/workspaces", owner.token()).get(0).get("id").asText();
+        String ws = getJson("/api/workspaces", owner.token()).get(0).get("id").asText();
 
         mvc.perform(post("/api/workspaces/" + ws + "/members").header("Authorization", "Bearer " + owner.token())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"" + viewerEmail + "\",\"role\":\"VIEWER\"}"))
@@ -140,7 +140,7 @@ class AuthApiTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"x\",\"scopes\":[\"read\"]}"))
                 .andExpect(status().isForbidden());
         // The key is bound to its own workspace.
-        String otherWs = get("/api/workspaces", viewer.token()).get(0).get("id").asText();
+        String otherWs = getJson("/api/workspaces", viewer.token()).get(0).get("id").asText();
         mvc.perform(get("/api/workspaces/" + otherWs + "/members").header("X-API-Key", key)).andExpect(status().isNotFound());
         mvc.perform(get("/api/workspaces").header("X-API-Key", key + "tampered")).andExpect(status().isUnauthorized());
     }
@@ -148,7 +148,7 @@ class AuthApiTest {
     @Test
     void lastOwnerCannotBeRemoved() throws Exception {
         Login owner = register("solo-" + UUID.randomUUID() + "@example.com");
-        String ws = get("/api/workspaces", owner.token()).get(0).get("id").asText();
+        String ws = getJson("/api/workspaces", owner.token()).get(0).get("id").asText();
         mvc.perform(delete("/api/workspaces/" + ws + "/members/" + owner.userId())
                 .header("Authorization", "Bearer " + owner.token())).andExpect(status().isConflict());
     }

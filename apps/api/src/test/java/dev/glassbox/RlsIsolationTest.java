@@ -41,6 +41,10 @@ class RlsIsolationTest {
         }
     }
 
+    static long countIn(UUID ws, UUID user, String sql, Object... args) throws SQLException {
+        return inContext(ws, user, c -> count(c, sql, args));
+    }
+
     static void setContext(Connection c, UUID ws, UUID user) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("SELECT set_config('app.workspace_id', ?, true), set_config('app.user_id', ?, true)")) {
             ps.setString(1, ws == null ? "" : ws.toString());
@@ -148,9 +152,9 @@ class RlsIsolationTest {
     void workspaceAseesNothingOfWorkspaceB() throws SQLException {
         for (String table : tenantTables()) {
             String col = tenantColumn(table);
-            long ownRows = inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM " + table + " WHERE " + col + " = ?", WS_A));
-            long otherRows = inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM " + table + " WHERE " + col + " = ?", WS_B));
-            long visible = inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM " + table));
+            long ownRows = countIn(WS_A, userA, "SELECT count(*) FROM " + table + " WHERE " + col + " = ?", WS_A);
+            long otherRows = countIn(WS_A, userA, "SELECT count(*) FROM " + table + " WHERE " + col + " = ?", WS_B);
+            long visible = countIn(WS_A, userA, "SELECT count(*) FROM " + table);
             assertThat(ownRows).as("%s: A sees own rows", table).isPositive();
             assertThat(otherRows).as("%s: A sees B rows", table).isZero();
             assertThat(visible).as("%s: A sees only its own rows", table).isEqualTo(ownRows);
@@ -160,7 +164,7 @@ class RlsIsolationTest {
     @Test
     void noContextMeansNoRows() throws SQLException {
         for (String table : tenantTables()) {
-            long visible = inContext(null, null, c -> count(c, "SELECT count(*) FROM " + table));
+            long visible = countIn(null, null, "SELECT count(*) FROM " + table);
             assertThat(visible).as("%s: fails closed without context", table).isZero();
         }
         // Even on a reused connection: after the transaction the GUC reads '' and must still fail closed.
@@ -193,14 +197,14 @@ class RlsIsolationTest {
             }
             return null;
         });
-        assertThat(inContext(WS_B, userB, c -> count(c, "SELECT count(*) FROM api_keys WHERE label = 'pwned'"))).isZero();
+        assertThat(countIn(WS_B, userB, "SELECT count(*) FROM api_keys WHERE label = 'pwned'")).isZero();
     }
 
     @Test
     void usersAreVisibleOnlyToThemselvesAndFellowMembers() throws SQLException {
-        assertThat(inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM users WHERE id = ?", userA))).isEqualTo(1);
-        assertThat(inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM users WHERE id = ?", userB))).isZero();
-        assertThat(inContext(null, null, c -> count(c, "SELECT count(*) FROM users"))).isZero();
+        assertThat(countIn(WS_A, userA, "SELECT count(*) FROM users WHERE id = ?", userA)).isEqualTo(1);
+        assertThat(countIn(WS_A, userA, "SELECT count(*) FROM users WHERE id = ?", userB)).isZero();
+        assertThat(countIn(null, null, "SELECT count(*) FROM users")).isZero();
         // Direct inserts are not allowed; registration goes through auth_create_user.
         assertThatThrownBy(() -> inContext(null, null, c -> {
             exec(c, "INSERT INTO users (email, password_hash) VALUES ('x@example.com', 'h')");
@@ -211,14 +215,14 @@ class RlsIsolationTest {
     @Test
     void canaryNeverAppearsInWorkspaceAsData() throws SQLException {
         for (String table : tenantTables()) {
-            long hits = inContext(WS_A, userA, c -> count(c, "SELECT count(*) FROM " + table + " t WHERE t::text LIKE '%CANARY-B%'"));
+            long hits = countIn(WS_A, userA, "SELECT count(*) FROM " + table + " t WHERE t::text LIKE '%CANARY-B%'");
             assertThat(hits).as("%s leaks workspace B canary", table).isZero();
         }
     }
 
     @Test
     void userCanListOwnWorkspacesButNotOthers() throws SQLException {
-        assertThat(inContext(null, userA, c -> count(c, "SELECT count(*) FROM workspaces"))).isEqualTo(1);
-        assertThat(inContext(null, userA, c -> count(c, "SELECT count(*) FROM workspaces WHERE id = ?", WS_B))).isZero();
+        assertThat(countIn(null, userA, "SELECT count(*) FROM workspaces")).isEqualTo(1);
+        assertThat(countIn(null, userA, "SELECT count(*) FROM workspaces WHERE id = ?", WS_B)).isZero();
     }
 }
