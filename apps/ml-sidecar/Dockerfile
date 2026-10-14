@@ -5,7 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
 WORKDIR /srv
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Generous timeouts and a build cache: wheels are large and some networks are slow.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --default-timeout=180 --retries 10 -r requirements.txt
 
 # Bake the default models into the image so containers start offline and fast.
 RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; \
