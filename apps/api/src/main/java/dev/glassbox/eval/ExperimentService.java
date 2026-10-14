@@ -9,10 +9,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.auth.Principal;
 import dev.glassbox.common.ApiException;
 import dev.glassbox.eval.ExperimentModel.*;
+import dev.glassbox.generate.LlmProvider;
+import dev.glassbox.generate.PromptBuilder;
 import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.rerank.Reranker;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalParams;
+import dev.glassbox.stats.Cohen;
 import dev.glassbox.tenancy.Role;
 import dev.glassbox.tenancy.Tx;
 import java.nio.charset.StandardCharsets;
@@ -32,23 +35,40 @@ import org.springframework.stereotype.Service;
 /**
  * Experiments: one FINAL test set version plus a list of configurations, each of which becomes a run (SPEC 7). The first
  * configuration is the baseline everything else is compared against. Running happens in {@link RunExperimentHandler}.
+ * A RETRIEVAL experiment only retrieves and scores against the gold evidence; a FULL one also generates, verifies claims and judges.
  */
 @Service
 public class ExperimentService {
     public static final int MAX_CONFIGS = 8;
+    /** Rough size of a full run per question, for the estimate: an answer prompt of about 2000 tokens plus a few short judge calls. */
+    private static final int ANSWER_TOKENS = 2200;
+    private static final int JUDGE_CALL_TOKENS = 450;
+    private static final int LLM_CALLS_PER_QUESTION = 5;
     private static final TypeReference<Map<String, Double>> METRICS = new TypeReference<>() {};
     private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() {};
 
     private final Tx tx;
     private final ObjectMapper json;
     private final JobQueue queue;
+    private final LlmProvider llm;
+    private final NliProvider nli;
     private final String embeddingModel;
+    private final int seed;
+    private final int maxTokens;
+    private final double promptUsdPerMillion;
 
-    public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, @Value("${glassbox.embed.default-model}") String embeddingModel) {
+    public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, LlmProvider llm, NliProvider nli,
+                             @Value("${glassbox.embed.default-model}") String embeddingModel, @Value("${glassbox.eval.seed}") int seed,
+                             @Value("${glassbox.llm.max-tokens}") int maxTokens, @Value("${glassbox.cost.prompt-usd-per-million}") double promptUsdPerMillion) {
         this.tx = tx;
         this.json = json;
         this.queue = queue;
+        this.llm = llm;
+        this.nli = nli;
         this.embeddingModel = embeddingModel;
+        this.seed = seed;
+        this.maxTokens = maxTokens;
+        this.promptUsdPerMillion = promptUsdPerMillion;
     }
 
     // ------------------------------------------------------------------ configurations
@@ -115,61 +135,96 @@ public class ExperimentService {
         }
     }
 
-    private static void requireRetrievalMode(String mode) {
-        if (mode != null && !mode.isBlank() && !mode.equalsIgnoreCase("RETRIEVAL")) {
-            throw ApiException.badRequest("Only retrieval experiments are available so far");
-        }
+    /** RETRIEVAL (default) or FULL. */
+    private static String parseMode(String mode) {
+        if (mode == null || mode.isBlank()) return "RETRIEVAL";
+        String m = mode.strip().toUpperCase();
+        if (!m.equals("RETRIEVAL") && !m.equals("FULL")) throw ApiException.badRequest("mode must be RETRIEVAL or FULL");
+        return m;
     }
 
     // ------------------------------------------------------------------ estimate and create
 
-    public Estimate estimate(Principal p, UUID ws, UUID testsetId, List<ConfigInput> configs, String mode) {
-        requireRetrievalMode(mode);
+    private Map<String, Object> estimateFor(String mode, int questions, int runs) {
+        long llmCalls = mode.equals("FULL") ? (long) questions * runs * LLM_CALLS_PER_QUESTION : 0;
+        long tokens = mode.equals("FULL") ? (long) questions * runs * (ANSWER_TOKENS + (LLM_CALLS_PER_QUESTION - 1) * JUDGE_CALL_TOKENS) : 0;
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("questions", questions);
+        m.put("retrievalCalls", questions * runs);
+        m.put("llmCalls", llmCalls);
+        m.put("tokens", tokens);
+        m.put("usd", tokens * promptUsdPerMillion / 1_000_000.0);
+        return m;
+    }
+
+    public Estimate estimate(Principal p, UUID ws, UUID testsetId, List<ConfigInput> configs, String modeText) {
+        String mode = parseMode(modeText);
         List<PipelineConfig> validated = validate(configs);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.VIEWER);
             String status = testsetStatus(j, testsetId);
-            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId);
+            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"));
             List<String> notes = new ArrayList<>();
             if (!status.equals("FINAL")) notes.add("This test set is " + status.toLowerCase() + ". Only a final version can be measured.");
             if (loaded.stale() > 0) notes.add(loaded.stale() + " question(s) are left out because their document changed since the test set was written.");
-            if (loaded.withoutEvidence() > 0) notes.add(loaded.withoutEvidence() + " question(s) have no gold evidence (unanswerable) and are not part of retrieval metrics.");
-            int calls = loaded.questions().size() * validated.size();
-            notes.add("Retrieval only: no text is generated, so this costs no model tokens and runs in seconds.");
-            return new Estimate(loaded.questions().size(), loaded.stale(), validated.size(), calls, 0, 0.0, notes);
+            if (loaded.withoutEvidence() > 0 && mode.equals("RETRIEVAL")) notes.add(loaded.withoutEvidence() + " question(s) have no gold evidence (unanswerable) and are not part of retrieval metrics.");
+            if (mode.equals("FULL")) {
+                notes.add("Full runs write an answer for every question, check each statement against the documents and have a judge grade it: about " + LLM_CALLS_PER_QUESTION
+                        + " model calls per question and run. On a small local model expect roughly a minute or more per answer.");
+                notes.add("The model that writes the answers (" + llm.model() + ") also acts as judge, and models tend to favour their own output.");
+            } else {
+                notes.add("Retrieval only: no text is generated, so this costs no model tokens and runs in seconds.");
+            }
+            Map<String, Object> e = estimateFor(mode, loaded.questions().size(), validated.size());
+            return new Estimate(loaded.questions().size(), loaded.stale(), validated.size(), (Integer) e.get("retrievalCalls"), ((Number) e.get("llmCalls")).intValue(),
+                    ((Number) e.get("tokens")).longValue(), (Double) e.get("usd"), notes);
         });
     }
 
-    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String mode, List<ConfigInput> configs) {
-        requireRetrievalMode(mode);
+    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs) {
+        String mode = parseMode(modeText);
         String cleanName = name == null ? "" : name.strip();
         if (cleanName.isEmpty() || cleanName.length() > 120) throw ApiException.badRequest("An experiment needs a name of 1 to 120 characters");
         List<PipelineConfig> validated = validate(configs);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.EDITOR);
             if (!testsetStatus(j, testsetId).equals("FINAL")) throw ApiException.conflict("Only a final test set can be measured. Finalize it first.");
-            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId);
+            MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"));
             if (loaded.questions().isEmpty()) throw ApiException.conflict("This test set has no accepted question with intact evidence to measure");
 
-            Map<String, Object> estimate = new LinkedHashMap<>();
-            estimate.put("questions", loaded.questions().size());
-            estimate.put("retrievalCalls", loaded.questions().size() * validated.size());
-            estimate.put("llmCalls", 0);
-            estimate.put("usd", 0.0);
             UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by) "
-                            + "VALUES (?, ?, ?, 'RETRIEVAL', ?, ?, ?::jsonb, ?) RETURNING id", UUID.class,
-                    ws, testsetId, cleanName, loaded.questions().size(), loaded.stale(), write(estimate), p.userId());
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?) RETURNING id", UUID.class,
+                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimateFor(mode, loaded.questions().size(), validated.size())), p.userId());
+            String meta = write(runMeta(mode));
             for (int i = 0; i < validated.size(); i++) {
                 UUID configId = j.queryForObject("INSERT INTO pipeline_configs (workspace_id, config, config_hash) VALUES (?, ?::jsonb, ?) "
                                 + "ON CONFLICT (workspace_id, config_hash) DO UPDATE SET config = EXCLUDED.config RETURNING id", UUID.class,
                         ws, write(validated.get(i)), hash(validated.get(i)));
-                j.update("INSERT INTO runs (workspace_id, experiment_id, config_id, label, ordinal) VALUES (?, ?, ?, ?, ?)",
-                        ws, id, configId, configs.get(i).name().strip(), i);
+                j.update("INSERT INTO runs (workspace_id, experiment_id, config_id, label, ordinal, meta) VALUES (?, ?, ?, ?, ?, ?::jsonb)",
+                        ws, id, configId, configs.get(i).name().strip(), i, meta);
             }
             queue.enqueue(j, ws, RunExperimentHandler.TYPE, json.createObjectNode().put("experimentId", id.toString()), "experiment-" + id);
             audit(j, ws, p.actor(), "experiment.create", "experiment:" + id);
-            return view(j, id, false);
+            return view(j, ws, id, false);
         });
+    }
+
+    /** What a run needs to be reproduced or questioned later (SPEC 7: model names, prompt versions and seeds are stored with each run). */
+    private Map<String, Object> runMeta(String mode) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("mode", mode);
+        if (mode.equals("FULL")) {
+            m.put("generationModel", llm.model());
+            m.put("judgeModel", llm.model());
+            m.put("rubricVersion", Judge.RUBRIC_VERSION);
+            m.put("answerPromptVersion", PromptBuilder.VERSION);
+            m.put("nliModel", nli.model());
+            m.put("temperature", 0.0);
+            m.put("seed", seed);
+            m.put("maxTokens", maxTokens);
+        }
+        m.put("embeddingModel", embeddingModel);
+        return m;
     }
 
     // ------------------------------------------------------------------ reading
@@ -179,7 +234,7 @@ public class ExperimentService {
             require(j, p, ws, Role.VIEWER);
             List<UUID> ids = j.queryForList("SELECT id FROM experiments ORDER BY created_at DESC, id DESC LIMIT 100", UUID.class);
             List<ExperimentView> out = new ArrayList<>();
-            for (UUID id : ids) out.add(view(j, id, false));
+            for (UUID id : ids) out.add(view(j, ws, id, false));
             return out;
         });
     }
@@ -187,7 +242,7 @@ public class ExperimentService {
     public ExperimentView get(Principal p, UUID ws, UUID id) {
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.VIEWER);
-            return view(j, id, true);
+            return view(j, ws, id, true);
         });
     }
 
@@ -196,10 +251,11 @@ public class ExperimentService {
             require(j, p, ws, Role.VIEWER);
             if (j.queryForList("SELECT 1 FROM runs WHERE id = ? AND experiment_id = ?", runId, experimentId).isEmpty()) throw ApiException.notFound("No such run");
             return j.query("SELECT r.question_id, q.question, q.qtype, r.metrics::text AS metrics, r.latency_ms, r.failure_stage, r.retrieved::text AS retrieved, "
-                            + "r.final_context::text AS final_context, r.trace_id FROM run_results r JOIN test_questions q ON q.id = r.question_id "
+                            + "r.final_context::text AS final_context, r.answer, r.claims::text AS claims, r.trace_id FROM run_results r JOIN test_questions q ON q.id = r.question_id "
                             + "WHERE r.run_id = ? ORDER BY q.seq", (rs, n) -> new ResultView(rs.getObject("question_id", UUID.class), rs.getString("question"),
                             rs.getString("qtype"), read(rs.getString("metrics"), METRICS), (Integer) rs.getObject("latency_ms"), rs.getString("failure_stage"),
-                            readTree(rs.getString("retrieved")), readTree(rs.getString("final_context")), rs.getObject("trace_id", UUID.class)), runId);
+                            readTree(rs.getString("retrieved")), readTree(rs.getString("final_context")), rs.getString("answer"),
+                            rs.getString("claims") == null ? null : readTree(rs.getString("claims")), rs.getObject("trace_id", UUID.class)), runId);
         });
     }
 
@@ -231,27 +287,32 @@ public class ExperimentService {
             Aligned al = align(va, vb, common);
             List<Comparisons.Row> rows = Comparisons.compare(al.a(), al.b(), runA + ":" + runB);
 
+            // which questions changed sides: by whether the context held the evidence (retrieval) or whether the answer was fully correct (full runs)
+            boolean full = a.mode().equals("FULL") && b.mode().equals("FULL");
+            String flipMetric = full ? Metrics.CORRECTNESS : RetrievalMetrics.CONTEXT_PASS;
             List<Flip> passToFail = new ArrayList<>(), failToPass = new ArrayList<>();
             Map<UUID, String[]> text = questionText(j, common);
             for (UUID q : common) {
-                double x = va.get(q).get(RetrievalMetrics.CONTEXT_PASS), y = vb.get(q).get(RetrievalMetrics.CONTEXT_PASS);
-                if (x == y) continue;
-                Flip flip = new Flip(q, text.get(q)[0], text.get(q)[1], va.get(q).get(RetrievalMetrics.CONTEXT_RECALL), vb.get(q).get(RetrievalMetrics.CONTEXT_RECALL));
-                if (x > y) passToFail.add(flip);
+                Double x = va.get(q).get(flipMetric), y = vb.get(q).get(flipMetric);
+                if (x == null || y == null) continue;
+                boolean passA = full ? x >= 1.0 : x > 0.5, passB = full ? y >= 1.0 : y > 0.5;
+                if (passA == passB) continue;
+                Flip flip = new Flip(q, text.get(q)[0], text.get(q)[1], x, y);
+                if (passA) passToFail.add(flip);
                 else failToPass.add(flip);
             }
-            return new ComparisonView(runA, runB, a.label(), b.label(), common.size(), rows, passToFail, failToPass);
+            return new ComparisonView(runA, runB, a.label(), b.label(), common.size(), rows, flipMetric, passToFail, failToPass);
         });
     }
 
     // ------------------------------------------------------------------ shared with the runner
 
-    record RunInfo(UUID id, UUID experimentId, UUID testsetId, String label, String status) {}
+    record RunInfo(UUID id, UUID experimentId, UUID testsetId, String label, String status, String mode) {}
 
     private RunInfo runInfo(JdbcTemplate j, UUID runId) {
-        var rows = j.query("SELECT r.id, r.experiment_id, e.testset_id, r.label, r.status FROM runs r JOIN experiments e ON e.id = r.experiment_id WHERE r.id = ?",
+        var rows = j.query("SELECT r.id, r.experiment_id, e.testset_id, r.label, r.status, e.mode FROM runs r JOIN experiments e ON e.id = r.experiment_id WHERE r.id = ?",
                 (rs, n) -> new RunInfo(rs.getObject("id", UUID.class), rs.getObject("experiment_id", UUID.class), rs.getObject("testset_id", UUID.class),
-                        rs.getString("label"), rs.getString("status")), runId);
+                        rs.getString("label"), rs.getString("status"), rs.getString("mode")), runId);
         if (rows.isEmpty()) throw ApiException.notFound("No such run");
         return rows.get(0);
     }
@@ -266,25 +327,23 @@ public class ExperimentService {
 
     record Aligned(Map<String, double[]> a, Map<String, double[]> b) {}
 
+    /** Score vectors of two runs, one metric at a time, over the questions where both runs have that metric (faithfulness is undefined for an abstention). */
     static Aligned align(Map<UUID, Map<String, Double>> a, Map<UUID, Map<String, Double>> b, List<UUID> questions) {
         Map<String, double[]> x = new LinkedHashMap<>(), y = new LinkedHashMap<>();
-        if (questions.isEmpty()) return new Aligned(x, y);
-        for (String metric : RetrievalMetrics.ALL) {
-            double[] va = new double[questions.size()], vb = new double[questions.size()];
-            boolean present = true;
-            for (int i = 0; i < questions.size(); i++) {
-                Double da = a.get(questions.get(i)).get(metric), db = b.get(questions.get(i)).get(metric);
-                if (da == null || db == null) {
-                    present = false;
-                    break;
-                }
-                va[i] = da;
-                vb[i] = db;
+        for (String metric : Metrics.ALL) {
+            List<double[]> pairs = new ArrayList<>();
+            for (UUID q : questions) {
+                Double da = a.get(q).get(metric), db = b.get(q).get(metric);
+                if (da != null && db != null) pairs.add(new double[] {da, db});
             }
-            if (present) {
-                x.put(metric, va);
-                y.put(metric, vb);
+            if (pairs.isEmpty()) continue;
+            double[] va = new double[pairs.size()], vb = new double[pairs.size()];
+            for (int i = 0; i < pairs.size(); i++) {
+                va[i] = pairs.get(i)[0];
+                vb[i] = pairs.get(i)[1];
             }
+            x.put(metric, va);
+            y.put(metric, vb);
         }
         return new Aligned(x, y);
     }
@@ -303,7 +362,7 @@ public class ExperimentService {
         return rows.get(0);
     }
 
-    private ExperimentView view(JdbcTemplate j, UUID id, boolean withComparisons) {
+    private ExperimentView view(JdbcTemplate j, UUID ws, UUID id, boolean withComparisons) {
         var rows = j.query("SELECT e.id, e.testset_id, t.name AS testset_name, t.version AS testset_version, e.name, e.status, e.kind, e.mode, e.question_count, "
                         + "e.stale_count, e.estimated_cost::text AS estimated, e.actual_cost::text AS actual, e.error, e.created_at, e.finished_at "
                         + "FROM experiments e JOIN testsets t ON t.id = e.testset_id WHERE e.id = ?",
@@ -332,13 +391,32 @@ public class ExperimentService {
         }
 
         List<RunComparison> vsBaseline = withComparisons ? baselineComparisons(j, runs) : List.of();
+        String mode = (String) r[6];
         @SuppressWarnings("unchecked")
-        ExperimentView view = new ExperimentView(id, (UUID) r[0], (String) r[1], (Integer) r[2], (String) r[3], (String) r[4], (String) r[5], (String) r[6], (Integer) r[7],
-                (Integer) r[8], (Map<String, Object>) r[9], (Map<String, Object>) r[10], (String) r[11], (OffsetDateTime) r[12], (OffsetDateTime) r[13], runs, vsBaseline);
+        ExperimentView view = new ExperimentView(id, (UUID) r[0], (String) r[1], (Integer) r[2], (String) r[3], (String) r[4], (String) r[5], mode, (Integer) r[7],
+                (Integer) r[8], (Map<String, Object>) r[9], (Map<String, Object>) r[10], (String) r[11], (OffsetDateTime) r[12], (OffsetDateTime) r[13], runs, vsBaseline,
+                mode.equals("FULL") ? judgeInfo(j, ws) : null);
         return view;
     }
 
-    /** Every finished run against the baseline (the first run), with one Holm correction over all of those tests together. */
+    /**
+     * Whether the judge behind the judged metrics can be trusted: calibrated (kappa at least 0.6 against human labels for this judge model and
+     * rubric version), uncalibrated (measured and below that), or unknown (never calibrated). Also warns that the judge is the generator.
+     */
+    JudgeInfo judgeInfo(JdbcTemplate j, UUID ws) {
+        Map<String, JudgeMetric> metrics = new LinkedHashMap<>();
+        for (String metric : List.of(Metrics.FAITHFULNESS, Metrics.CORRECTNESS, Metrics.RELEVANCE)) {
+            var rows = j.query("SELECT kappa, n FROM judge_calibrations WHERE judge_model = ? AND rubric_version = ? AND metric = ?",
+                    (rs, n) -> new JudgeMetric(rs.getDouble("kappa") >= Cohen.TRUSTED_KAPPA ? "calibrated" : "uncalibrated", rs.getDouble("kappa"), rs.getInt("n")),
+                    llm.model(), Judge.RUBRIC_VERSION, metric);
+            metrics.put(metric, rows.isEmpty() ? new JudgeMetric("unknown", null, null) : rows.get(0));
+        }
+        List<String> warnings = new ArrayList<>();
+        warnings.add("The model that writes the answers (" + llm.model() + ") also judges them. Models tend to favour their own output, so treat judged scores with care.");
+        return new JudgeInfo(llm.model(), Judge.RUBRIC_VERSION, llm.model(), nli.model(), true, metrics, warnings);
+    }
+
+    /** Every finished run against the baseline (the first run), with one Holm correction over the configurations compared, metric by metric. */
     List<RunComparison> baselineComparisons(JdbcTemplate j, List<RunView> runs) {
         if (runs.size() < 2 || !runs.get(0).status().equals("DONE")) return List.of();
         Map<UUID, Map<String, Double>> base = scores(j, runs.get(0).id());

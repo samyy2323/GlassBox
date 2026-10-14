@@ -14,6 +14,10 @@ RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_
 TextEmbedding(model_name='BAAI/bge-small-en-v1.5'); TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2')" \
     && useradd --system --uid 10001 --no-create-home sidecar && chmod -R a+rX /models
 
+# The NLI weights come from a standalone module, so changing application code does not download them again.
+COPY app/nli_model.py /tmp/nli_model.py
+RUN python /tmp/nli_model.py && chmod -R a+rX /models && rm /tmp/nli_model.py
+
 COPY app app
 USER 10001
 EXPOSE 8000

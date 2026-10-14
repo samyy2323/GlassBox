@@ -19,10 +19,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * ranges no longer mean anything, so it is counted and reported but not run.
  */
 final class MeasurableQuestions {
-    record Question(UUID id, String qtype, String text, List<GoldSpan> spans) {
-        /** Questions from the same document resemble each other, so the first span's document is the cluster for the cluster bootstrap. */
+    record Question(UUID id, String qtype, String text, String expected, List<GoldSpan> spans) {
+        /** Questions from the same document resemble each other, so the first span's document is the cluster for the cluster bootstrap. Null for an unanswerable question. */
         UUID clusterDocument() {
-            return spans.get(0).documentId();
+            return spans.isEmpty() ? null : spans.get(0).documentId();
         }
     }
 
@@ -30,11 +30,16 @@ final class MeasurableQuestions {
 
     private MeasurableQuestions() {}
 
+    /** Retrieval experiments leave unanswerable questions out (nothing to hit); full experiments keep them to measure abstention. */
     static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId) {
-        record Row(UUID id, String qtype, String question, String spans) {}
-        List<Row> rows = j.query("SELECT id, qtype, question, gold_chunk_spans::text AS spans FROM test_questions "
+        return load(j, json, testsetId, false);
+    }
+
+    static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable) {
+        record Row(UUID id, String qtype, String question, String expected, String spans) {}
+        List<Row> rows = j.query("SELECT id, qtype, question, expected_answer, gold_chunk_spans::text AS spans FROM test_questions "
                 + "WHERE testset_id = ? AND review_status IN ('ACCEPTED', 'EDITED') ORDER BY seq",
-                (rs, n) -> new Row(rs.getObject("id", UUID.class), rs.getString("qtype"), rs.getString("question"), rs.getString("spans")), testsetId);
+                (rs, n) -> new Row(rs.getObject("id", UUID.class), rs.getString("qtype"), rs.getString("question"), rs.getString("expected_answer"), rs.getString("spans")), testsetId);
 
         List<Question> parsed = new ArrayList<>();
         Set<UUID> docs = new HashSet<>();
@@ -48,10 +53,11 @@ final class MeasurableQuestions {
             }
             if (spans.isEmpty()) {
                 withoutEvidence++; // an unanswerable question: no gold span to hit
+                if (includeUnanswerable) parsed.add(new Question(r.id(), r.qtype(), r.question(), r.expected(), spans));
                 continue;
             }
             spans.forEach(s -> docs.add(s.documentId()));
-            parsed.add(new Question(r.id(), r.qtype(), r.question(), spans));
+            parsed.add(new Question(r.id(), r.qtype(), r.question(), r.expected(), spans));
         }
 
         Map<UUID, UUID> currentVersion = new HashMap<>();

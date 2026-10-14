@@ -109,7 +109,10 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO experiments (id, workspace_id, testset_id, name) VALUES (?, ?, ?, ?)", exp, ws, set, canary);
             exec(c, "INSERT INTO runs (id, workspace_id, experiment_id, config_id, label, ordinal) VALUES (?, ?, ?, ?, ?, 0)", runA, ws, exp, cfg, canary);
             exec(c, "INSERT INTO runs (id, workspace_id, experiment_id, config_id, label, ordinal) VALUES (?, ?, ?, ?, ?, 1)", runB, ws, exp, cfg, canary);
-            exec(c, "INSERT INTO run_results (workspace_id, run_id, question_id, answer) VALUES (?, ?, ?, ?)", ws, runA, question, canary);
+            UUID result = UUID.randomUUID();
+            exec(c, "INSERT INTO run_results (id, workspace_id, run_id, question_id, answer) VALUES (?, ?, ?, ?, ?)", result, ws, runA, question, canary);
+            exec(c, "INSERT INTO judge_labels (workspace_id, run_result_id, metric, item_key, judge_model, rubric_version, judge_label) VALUES (?, ?, 'correctness', 'answer', ?, 'v1', 'correct')", ws, result, canary);
+            exec(c, "INSERT INTO judge_calibrations (workspace_id, judge_model, rubric_version, metric, n, agreement, kappa) VALUES (?, ?, 'v1', 'correctness', 30, 0.9, 0.8)", ws, canary);
             exec(c, "INSERT INTO run_metrics (run_id, workspace_id, metric, n) VALUES (?, ?, ?, 1)", runA, ws, "m-" + canary);
             exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
             return null;

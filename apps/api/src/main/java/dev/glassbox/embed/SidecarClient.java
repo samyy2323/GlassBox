@@ -15,6 +15,10 @@ public class SidecarClient {
     public record EmbedResponse(String model, int dim, List<List<Double>> embeddings) {}
     public record RerankRequest(String query, List<String> documents, String model) {}
     public record RerankResponse(String model, List<Double> scores) {}
+    public record NliPairDto(String premise, String hypothesis) {}
+    public record NliRequest(List<NliPairDto> pairs, String model) {}
+    public record NliScoreDto(double entailment, double neutral, double contradiction) {}
+    public record NliResponse(String model, List<NliScoreDto> results) {}
 
     private final RestClient http;
     private final int maxAttempts;
@@ -39,5 +43,10 @@ public class SidecarClient {
     public RerankResponse rerank(String model, String query, List<String> documents) {
         return Retry.call("sidecar /rerank", maxAttempts, backoff, () -> http.post().uri("/rerank")
                 .body(new RerankRequest(query, documents, model)).retrieve().body(RerankResponse.class));
+    }
+
+    public NliResponse nli(String model, List<NliPairDto> pairs) {
+        return Retry.call("sidecar /nli", maxAttempts, backoff, () -> http.post().uri("/nli")
+                .body(new NliRequest(pairs, model)).retrieve().body(NliResponse.class));
     }
 }

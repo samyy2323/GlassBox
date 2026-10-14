@@ -1,4 +1,4 @@
-"""Glassbox ML sidecar: local embeddings and cross-encoder reranking (SPEC section 3).
+"""Glassbox ML sidecar: local embeddings, cross-encoder reranking and NLI claim checking (SPEC section 3 and 10).
 
 Runs ONNX models through fastembed, so no PyTorch is needed. Set SIDECAR_FAKE=1 to use
 deterministic fake backends (used by tests and CI so no model is downloaded).
@@ -23,6 +23,8 @@ DEFAULT_EMBED_MODEL = "bge-small-en-v1.5"
 RERANK_MODELS = {"ms-marco-MiniLM-L-6-v2": "Xenova/ms-marco-MiniLM-L-6-v2"}
 DEFAULT_RERANK_MODEL = "ms-marco-MiniLM-L-6-v2"
 
+NLI_MODEL = "nli-deberta-v3-xsmall"
+MAX_PAIRS = 64
 MAX_TEXTS = 256
 MAX_CHARS = 20_000
 FAKE = os.environ.get("SIDECAR_FAKE") == "1"
@@ -33,7 +35,7 @@ class Backends:
     """Loads models lazily and caches them; loading is serialised so concurrent requests do not double-load."""
 
     def __init__(self):
-        self._embed, self._rerank = {}, {}
+        self._embed, self._rerank, self._nli = {}, {}, None
         self._lock = threading.Lock()
 
     def embedder(self, model_id: str):
@@ -57,6 +59,17 @@ class Backends:
 
                     self._rerank[model_id] = TextCrossEncoder(model_name=RERANK_MODELS[model_id])
             return self._rerank[model_id]
+
+    def nli(self):
+        with self._lock:
+            if self._nli is None:
+                if FAKE:
+                    self._nli = _FakeNli()
+                else:
+                    from app.nli_model import NliModel
+
+                    self._nli = NliModel()
+            return self._nli
 
 
 _TOKEN = re.compile(r"\w+")
@@ -93,6 +106,7 @@ async def lifespan(_: FastAPI):
     # Load the defaults at startup so the first request is fast and a broken image fails the healthcheck.
     backends.embedder(DEFAULT_EMBED_MODEL)
     backends.reranker(DEFAULT_RERANK_MODEL)
+    backends.nli()
     yield
 
 
@@ -121,6 +135,27 @@ class RerankResponse(BaseModel):
     scores: list[float]
 
 
+class NliPair(BaseModel):
+    premise: str
+    hypothesis: str
+
+
+class NliRequest(BaseModel):
+    pairs: list[NliPair] = Field(min_length=1, max_length=MAX_PAIRS)
+    model: str = NLI_MODEL
+
+
+class NliScore(BaseModel):
+    entailment: float
+    neutral: float
+    contradiction: float
+
+
+class NliResponse(BaseModel):
+    model: str
+    results: list[NliScore]
+
+
 def _check_texts(texts: list[str]) -> None:
     if any(len(t) > MAX_CHARS for t in texts):
         raise HTTPException(status_code=413, detail=f"each text must be at most {MAX_CHARS} characters")
@@ -128,7 +163,7 @@ def _check_texts(texts: list[str]) -> None:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "fake": FAKE, "embedModels": list(EMBED_MODELS), "rerankModels": list(RERANK_MODELS)}
+    return {"status": "ok", "fake": FAKE, "embedModels": list(EMBED_MODELS), "rerankModels": list(RERANK_MODELS), "nliModels": [NLI_MODEL]}
 
 
 @app.post("/embed", response_model=EmbedResponse)
@@ -149,6 +184,33 @@ def rerank(req: RerankRequest):
     return RerankResponse(model=req.model, scores=scores)
 
 
+@app.post("/nli", response_model=NliResponse)
+def nli(req: NliRequest):
+    if req.model != NLI_MODEL:
+        raise HTTPException(status_code=422, detail=f"unknown model {req.model}; known: {[NLI_MODEL]}")
+    _check_texts([t for p in req.pairs for t in (p.premise, p.hypothesis)])
+    scores = backends.nli().score([(p.premise, p.hypothesis) for p in req.pairs])
+    return NliResponse(model=req.model, results=[NliScore(**s) for s in scores])
+
+
 def _normalize(v: list[float]) -> list[float]:
     n = math.sqrt(sum(x * x for x in v)) or 1.0
     return [x / n for x in v]
+
+
+class _FakeNli:
+    """Deterministic stand-in: entailment is the share of the hypothesis's words found in the premise; the word 'contradicts' forces a contradiction."""
+
+    def score(self, pairs):
+        out = []
+        for premise, hypothesis in pairs:
+            hyp = _TOKEN.findall(hypothesis.lower())
+            if "contradicts" in hyp:
+                out.append({"entailment": 0.03, "neutral": 0.07, "contradiction": 0.90})
+                continue
+            prem = set(_TOKEN.findall(premise.lower()))
+            share = (sum(1 for w in hyp if w in prem) / len(hyp)) if hyp else 0.0
+            ent = 0.98 * share
+            rest = 1.0 - ent
+            out.append({"entailment": ent, "neutral": rest * 0.9, "contradiction": rest * 0.1})
+        return out

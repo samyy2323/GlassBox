@@ -66,3 +66,31 @@ def test_rerank_scores_each_document_in_order():
         scores = r.json()["scores"]
         assert len(scores) == 3
         assert scores[1] > scores[2] > scores[0]
+
+
+def test_nli_scores_each_pair_with_probabilities_that_sum_to_one():
+    with TestClient(app) as c:
+        pairs = [
+            {"premise": "Pumps must be inspected every 90 days.", "hypothesis": "Pumps are inspected every 90 days."},
+            {"premise": "Pumps must be inspected every 90 days.", "hypothesis": "The cafeteria serves lunch on Fridays."},
+            {"premise": "Pumps must be inspected every 90 days.", "hypothesis": "This contradicts the schedule."},
+        ]
+        r = c.post("/nli", json={"pairs": pairs})
+        assert r.status_code == 200
+        results = r.json()["results"]
+        assert len(results) == 3
+        for s in results:
+            assert math.isclose(s["entailment"] + s["neutral"] + s["contradiction"], 1.0, rel_tol=1e-6)
+        assert results[0]["entailment"] > 0.8
+        assert results[1]["entailment"] < 0.4
+        assert results[2]["contradiction"] > 0.8
+
+
+def test_nli_limits_and_unknown_model():
+    with TestClient(app) as c:
+        assert c.post("/nli", json={"pairs": []}).status_code == 422
+        too_many = [{"premise": "a", "hypothesis": "b"}] * 65
+        assert c.post("/nli", json={"pairs": too_many}).status_code == 422
+        assert c.post("/nli", json={"pairs": [{"premise": "a", "hypothesis": "b"}], "model": "nope"}).status_code == 422
+        assert c.post("/nli", json={"pairs": [{"premise": "x" * (MAX_CHARS + 1), "hypothesis": "b"}]}).status_code == 413
+        assert "nli-deberta-v3-xsmall" in c.get("/health").json()["nliModels"]

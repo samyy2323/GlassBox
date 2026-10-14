@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class PromptBuilder {
     /** The exact abstention sentence. Evaluation recognises it, so it must not be paraphrased. */
+    /** Recorded with every experiment run: a changed prompt is a different system to measure. */
+    public static final String VERSION = "answer-v1";
     public static final String NOT_IN_DOCUMENTS = "The answer is not in the documents.";
 
     /**

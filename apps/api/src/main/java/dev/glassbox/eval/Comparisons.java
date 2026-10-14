@@ -38,13 +38,13 @@ public final class Comparisons {
         List<Draft> drafts = new ArrayList<>();
         for (Pair pair : pairs) {
             List<String> metrics = new ArrayList<>();
-            for (String m : RetrievalMetrics.ALL) if (pair.a().containsKey(m) && pair.b().containsKey(m)) metrics.add(m);
+            for (String m : Metrics.ALL) if (pair.a().containsKey(m) && pair.b().containsKey(m)) metrics.add(m);
             for (String m : pair.a().keySet()) if (pair.b().containsKey(m) && !metrics.contains(m)) metrics.add(m);
             for (String metric : metrics) {
                 double[] x = pair.a().get(metric), y = pair.b().get(metric);
                 double[] d = Summary.diff(y, x);
                 long seed = pair.key().hashCode() * 31L + metric.hashCode();
-                boolean binary = RetrievalMetrics.BINARY.contains(metric);
+                boolean binary = Metrics.BINARY.contains(metric);
                 double p = binary ? PairedTests.mcnemarExactP(x, y) : PairedTests.signFlipP(d, seed);
                 drafts.add(new Draft(pair.key(), metric, x, y, d, Bootstrap.meanCi(d, seed), p, binary ? "mcnemar" : "permutation"));
             }

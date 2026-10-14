@@ -61,6 +61,13 @@ glassbox:
     rate-per-minute: 20
   traces:
     retention-days: 30
+  eval:
+    # Sampling seed for answer generation and judging; temperature is always 0. Stored with every run.
+    seed: 42
+  cost:
+    # Prices in USD per million tokens. A local model costs nothing, so the default is zero; set these for a hosted model.
+    prompt-usd-per-million: ${GLASSBOX_COST_PROMPT:0.0}
+    completion-usd-per-million: ${GLASSBOX_COST_COMPLETION:0.0}
   testset:
     # Two extra model calls per question (self-contained? answerable from the evidence alone?). Off = faster, fewer flags.
     llm-filters: ${GLASSBOX_TESTSET_LLM_FILTERS:true}

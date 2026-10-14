@@ -30,15 +30,20 @@ public final class RunAggregates {
         Map<String, List<Score>> byType = new LinkedHashMap<>();
         for (Score s : scores) byType.computeIfAbsent(s.qtype(), k -> new ArrayList<>()).add(s);
 
-        for (String metric : RetrievalMetrics.ALL) {
-            rows.add(row(metric, ALL, QUESTION, scores, metric, seed));
-            if (scores.size() > 1) {
-                double[] x = vector(scores, metric);
-                int[] groups = scores.stream().mapToInt(Score::cluster).toArray();
+        for (String metric : Metrics.ALL) {
+            List<Score> with = scores.stream().filter(s -> s.metrics().containsKey(metric)).toList();
+            if (with.isEmpty()) continue; // a metric no question could be scored on (faithfulness in a retrieval-only run)
+            rows.add(row(metric, ALL, QUESTION, with, metric, seed));
+            if (with.size() > 1) {
+                double[] x = vector(with, metric);
+                int[] groups = with.stream().mapToInt(Score::cluster).toArray();
                 Bootstrap.Interval ci = Bootstrap.clusterMeanCi(x, groups, Bootstrap.RESAMPLES, Bootstrap.CONFIDENCE, seed + metric.hashCode());
                 rows.add(new Row(metric, ALL, CLUSTER, ci.mean(), ci.low(), ci.high(), x.length));
             }
-            for (var e : byType.entrySet()) rows.add(row(metric, e.getKey(), QUESTION, e.getValue(), metric, seed));
+            for (var e : byType.entrySet()) {
+                List<Score> slice = e.getValue().stream().filter(s -> s.metrics().containsKey(metric)).toList();
+                if (!slice.isEmpty()) rows.add(row(metric, e.getKey(), QUESTION, slice, metric, seed));
+            }
         }
         double[] latency = scores.stream().mapToDouble(s -> s.latencyMs()).toArray();
         if (latency.length > 0) {
