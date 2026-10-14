@@ -98,6 +98,10 @@ class RlsIsolationTest {
                     chunk, ws, "hash-" + canary, chunking);
             exec(c, "INSERT INTO jobs (workspace_id, type, payload, idempotency_key) VALUES (?, 'T', ?::jsonb, ?)", ws, "{\"c\":\"" + canary + "\"}", "k-" + canary);
             exec(c, "INSERT INTO traces (workspace_id, kind, question, answer, data) VALUES (?, 'CHAT', ?, ?, ?::jsonb)", ws, canary, canary, "{\"c\":\"" + canary + "\"}");
+            // P2 tables
+            UUID set = UUID.randomUUID();
+            exec(c, "INSERT INTO testsets (id, workspace_id, name, status, params) VALUES (?, ?, ?, 'DRAFT', ?::jsonb)", set, ws, canary, "{\"c\":\"" + canary + "\"}");
+            exec(c, "INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, qtype, origin) VALUES (?, ?, ?, ?, 'FACTUAL', 'MANUAL')", ws, set, canary, canary);
             return null;
         });
     }

@@ -26,6 +26,10 @@ public class FakeLlmProvider implements LlmProvider {
     public static volatile String LAST_USER_PROMPT = "";
     public static volatile String LAST_SYSTEM_PROMPT = "";
 
+    /** Test set generation: a scripted reply for requests asking for JSON (the generator prompt); null falls back to the default. */
+    public static volatile java.util.function.Function<Request, String> GENERATOR_SCRIPT;
+    public static final AtomicInteger GENERATOR_CALLS = new AtomicInteger();
+
     private static final Pattern FIRST_CHUNK = Pattern.compile("\\[(c\\d+)\\][^\\n]*\\n([^\\n]+)");
 
     @Override public String model() { return "fake-llm"; }
@@ -36,6 +40,22 @@ public class FakeLlmProvider implements LlmProvider {
         LAST_SYSTEM_PROMPT = request.messages().get(0).content();
         String user = request.messages().get(1).content();
         LAST_USER_PROMPT = user;
+        if (request.jsonMode()) {
+            GENERATOR_CALLS.incrementAndGet();
+            var script = GENERATOR_SCRIPT;
+            String scripted = script == null ? null : script.apply(request);
+            emit(scripted != null ? scripted : generatorReply(user), onToken);
+            return;
+        }
+        if (LAST_SYSTEM_PROMPT.contains("Decide whether a question can be understood")) {
+            emit(user.contains("NOT SELF CONTAINED") ? "NO" : "YES", onToken);
+            return;
+        }
+        if (LAST_SYSTEM_PROMPT.contains("using only the text below")) {
+            int from = user.indexOf("Text:\n") + 6, to = user.lastIndexOf("\n\nQuestion:");
+            emit(from >= 6 && to > from ? user.substring(from, to) : "NOT STATED", onToken);
+            return;
+        }
         CountDownLatch started = STARTED;
         if (started != null) started.countDown();
         CountDownLatch hold = HOLD;
@@ -62,6 +82,36 @@ public class FakeLlmProvider implements LlmProvider {
         for (String piece : answer.split("(?<= )")) onToken.accept(piece);
     }
 
+    private static void emit(String text, Consumer<String> onToken) {
+        for (String piece : text.split("(?<= )")) onToken.accept(piece);
+    }
+
+    /** Behaves like a model told to write a question about each passage: asks about its two longest words, answers with its first sentence. */
+    private static String generatorReply(String user) {
+        String[] parts = user.split("(?=Passage [A-Z] \\(from )");
+        StringBuilder answer = new StringBuilder();
+        String firstSentence = "";
+        for (int i = 0; i < parts.length; i++) {
+            if (!parts[i].startsWith("Passage ")) continue;
+            String body = parts[i].substring(parts[i].indexOf(":\n") + 2);
+            if (i == parts.length - 1) body = body.substring(0, Math.max(0, body.lastIndexOf("\n\n"))); // drop the instruction line
+            // the first line with real sentence content (a chunk may start with its heading path)
+            String line = java.util.Arrays.stream(body.split("\n")).filter(l -> l.trim().split("\\s+").length >= 6).findFirst().orElse(body.strip());
+            String first = firstSentence(line);
+            if (firstSentence.isEmpty()) firstSentence = first;
+            answer.append(answer.length() == 0 ? "" : " ").append(first).append('.');
+        }
+        var words = java.util.Arrays.stream(firstSentence.split("[^\\p{L}\\p{N}]+")).filter(w -> w.length() > 4).distinct()
+                .sorted(java.util.Comparator.comparingInt(String::length).reversed()).limit(2).toList();
+        String topic = words.isEmpty() ? "this topic" : String.join(" and ", words);
+        String question = "What is stated about " + topic + (user.contains("NOT SELF CONTAINED") ? " in the passage" : "") + "?";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of("question", question, "expected_answer", answer.toString()));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static String firstSentence(String text) {
         int dot = text.indexOf('.');
         return (dot > 0 ? text.substring(0, dot) : text).strip();
@@ -69,6 +119,8 @@ public class FakeLlmProvider implements LlmProvider {
 
     public static void reset() {
         CALLS.set(0);
+        GENERATOR_CALLS.set(0);
+        GENERATOR_SCRIPT = null;
         FAIL_NEXT.set(0);
         HOLD = null;
         STARTED = null;

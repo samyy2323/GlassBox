@@ -31,7 +31,9 @@ import org.springframework.web.client.RestClientResponseException;
 @Component
 public class OpenAiCompatibleLlmProvider implements LlmProvider {
     record Msg(String role, String content) {}
-    record Body(String model, List<Msg> messages, boolean stream, double temperature, @JsonProperty("max_tokens") int maxTokens) {}
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    record Body(String model, List<Msg> messages, boolean stream, double temperature, @JsonProperty("max_tokens") int maxTokens,
+                @JsonProperty("response_format") java.util.Map<String, String> responseFormat, Integer seed) {}
 
     private final RestClient http;
     private final ObjectMapper json;
@@ -71,7 +73,8 @@ public class OpenAiCompatibleLlmProvider implements LlmProvider {
             onToken.accept(t);
         };
         Body body = new Body(model, request.messages().stream().map(m -> new Msg(m.role(), m.content())).toList(),
-                true, request.temperature(), request.maxTokens());
+                true, request.temperature(), request.maxTokens(),
+                request.jsonMode() ? java.util.Map.of("type", "json_object") : null, request.seed());
         try {
             Retry.call("llm chat", maxAttempts, backoff, () -> {
                 try {

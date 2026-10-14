@@ -63,6 +63,16 @@ class OpenAiCompatibleLlmProviderTest {
     }
 
     @Test
+    void jsonModeAndSeedAreSentOnlyWhenAskedForAndCompleteJoinsTheTokens(WireMockRuntimeInfo wm) {
+        stubFor(post("/v1/chat/completions").willReturn(stream(sse(chunk("{\"question\": "), chunk("\"Why?\"}"), "[DONE]"))));
+        LlmProvider.Request json = new LlmProvider.Request(REQUEST.messages(), 0.2, 50, true, 7);
+        assertThat(provider(wm, "", 1).complete(json)).isEqualTo("{\"question\": \"Why?\"}");
+        verify(postRequestedFor(urlEqualTo("/v1/chat/completions")).withRequestBody(equalToJson("{\"model\":\"test-model\",\"stream\":true,\"temperature\":0.2,"
+                + "\"max_tokens\":50,\"response_format\":{\"type\":\"json_object\"},\"seed\":7,"
+                + "\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}]}")));
+    }
+
+    @Test
     void sendsABearerKeyOnlyWhenConfigured(WireMockRuntimeInfo wm) {
         stubFor(post("/v1/chat/completions").willReturn(stream(sse(chunk("ok"), "[DONE]"))));
         provider(wm, "sk-secret", 1).stream(REQUEST, t -> { });

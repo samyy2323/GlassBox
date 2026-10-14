@@ -61,6 +61,9 @@ glassbox:
     rate-per-minute: 20
   traces:
     retention-days: 30
+  testset:
+    # Two extra model calls per question (self-contained? answerable from the evidence alone?). Off = faster, fewer flags.
+    llm-filters: ${GLASSBOX_TESTSET_LLM_FILTERS:true}
   chat:
     reranker: NONE
     top-n: 5
