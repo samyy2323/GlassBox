@@ -125,10 +125,13 @@ class ChunkerPropertyTest {
                         .anyMatch(c -> c.start() <= b.start() && b.end() <= c.end());
             }
         }
-        // Every chunk starts with its heading path.
+        // Every chunk carries its heading path, except that a chunk which already begins with its own heading does not repeat it.
         assertThat(chunks).allSatisfy(c -> {
+            String body = doc.text().substring(c.start(), c.end());
             List<String> path = doc.sections().get(c.sectionOrdinal()).headingPath();
-            if (!path.isEmpty()) assertThat(c.text()).startsWith(String.join(" > ", path) + "\n");
+            if (!path.isEmpty() && body.startsWith(path.get(path.size() - 1))) path = path.subList(0, path.size() - 1);
+            if (path.isEmpty()) assertThat(c.text()).isEqualTo(body);
+            else assertThat(c.text()).startsWith(String.join(" > ", path) + "\n").endsWith(body);
         });
     }
 
@@ -143,7 +146,7 @@ class ChunkerPropertyTest {
         ParsedDocument doc = tb.build();
         List<ChunkOut> chunks = new StructureChunker(100).chunk(doc);
         assertThat(chunks).hasSize(1);
-        assertThat(chunks.get(0).text()).isEqualTo("Policy\nPolicy\n\nFirst paragraph here.\n\nan item");
+        assertThat(chunks.get(0).text()).isEqualTo("Policy\n\nFirst paragraph here.\n\nan item");
     }
 
     @Example

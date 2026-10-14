@@ -47,6 +47,8 @@ final class ChunkSupport {
         int sec = sectionAt(start);
         String body = doc.text().substring(start, end);
         List<String> path = headingPathOf(sec);
+        // The first chunk of a section already starts with its own heading: only add the ancestors in that case.
+        if (!path.isEmpty() && body.startsWith(path.get(path.size() - 1))) path = path.subList(0, path.size() - 1);
         String text = prependHeadingPath && !path.isEmpty() ? String.join(" > ", path) + "\n" + body : body;
         return new ChunkOut(ordinal, sec, text, tokens.count(start, end), start, end, doc.pageAt(start));
     }
