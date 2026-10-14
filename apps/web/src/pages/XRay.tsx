@@ -23,9 +23,9 @@ interface Selection {
 }
 
 const DISPOSITION: Record<CandidateView['disposition'], { text: string; cls: string }> = {
-  IN_CONTEXT: { text: 'in prompt', cls: 'bg-fg text-canvas' },
-  DROPPED: { text: 'dropped', cls: 'border border-fg/40 text-fg' },
-  CUT: { text: 'cut', cls: 'bg-slate-100 text-muted dark:bg-slate-800 dark:text-slate-300' },
+  IN_CONTEXT: { text: 'in prompt', cls: 'bg-ok/15 text-ok' },
+  DROPPED: { text: 'dropped', cls: 'bg-warn/15 text-warn' },
+  CUT: { text: 'cut', cls: 'bg-fg/10 text-muted' },
 }
 
 function fmt(n: number | undefined, digits = 3) {
@@ -42,7 +42,7 @@ function Timeline({ spans, total }: { spans: TraceSpan[]; total?: number }) {
           <div
             key={i}
             style={{ width: `${Math.max(1.5, (s.millis / sum) * 100)}%` }}
-            className={['bg-fg/90', 'bg-fg/65', 'bg-fg/45', 'bg-fg/30', 'bg-fg/18'][i % 5]}
+            className={['bg-accent', 'bg-accent2', 'bg-ok', 'bg-warn', 'bg-fg/40'][i % 5]}
             title={`${STAGE_LABEL[s.stage] ?? s.stage}: ${s.millis} ms`}
           />
         ))}
@@ -181,12 +181,12 @@ export default function XRay() {
               <p className="card text-sm text-muted">Nothing was retrieved{t.status === 'ABSTAINED' ? ', so no model was called' : ''}.</p>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-[var(--line)]">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[60rem] table-fixed text-left text-xs">
                   <caption className="sr-only">Candidates in fused order, with the scores that ranked them</caption>
                   <thead className="bg-[var(--glass-strong)] uppercase text-muted">
                     <tr>
-                      <th scope="col" className="px-2 py-2">#</th>
-                      <th scope="col" className="px-2 py-2">Passage</th>
+                      <th scope="col" className="w-10 px-2 py-2">#</th>
+                      <th scope="col" className="w-[22rem] px-2 py-2">Passage</th>
                       <th scope="col" className="px-2 py-2">Vector</th>
                       <th scope="col" className="px-2 py-2">Keyword</th>
                       <th scope="col" className="px-2 py-2">Fused</th>
@@ -198,21 +198,21 @@ export default function XRay() {
                     {candidates.map((c, i) => (
                       <tr key={c.chunkId} className={sel && sel.start === c.charStart && sel.documentId === c.documentId ? 'bg-fg/[0.08]' : ''}>
                         <td className="px-2 py-2 tabular-nums text-muted">{i + 1}</td>
-                        <td className="max-w-[18rem] px-2 py-2">
-                          <button type="button" onClick={() => pickCandidate(c)} className="text-left hover:underline">
-                            <span className="font-medium">{c.title}{c.page ? `, p.${c.page}` : ''}</span>
+                        <td className="px-2 py-2">
+                          <button type="button" onClick={() => pickCandidate(c)} className="block w-full min-w-0 text-left hover:underline">
+                            <span className="block truncate font-medium text-accent">{c.title}{c.page ? `, p.${c.page}` : ''}</span>
                             <span className="block truncate text-muted">{c.snippet}</span>
                           </button>
                         </td>
-                        <td className="px-2 py-2 tabular-nums">{c.vecRank != null ? `#${c.vecRank} · ${fmt(c.vecDistance)}` : '–'}</td>
-                        <td className="px-2 py-2 tabular-nums">{c.kwRank != null ? `#${c.kwRank} · ${fmt(c.kwScore)}` : '–'}</td>
-                        <td className="px-2 py-2 tabular-nums">{fmt(c.fusedScore, 4)}</td>
-                        <td className="px-2 py-2 tabular-nums">{c.rankedPosition != null ? `#${c.rankedPosition}${c.rerankScore != null ? ` · ${fmt(c.rerankScore, 2)}` : ''}` : '–'}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">{c.vecRank != null ? `#${c.vecRank} · ${fmt(c.vecDistance)}` : '–'}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">{c.kwRank != null ? `#${c.kwRank} · ${fmt(c.kwScore)}` : '–'}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">{fmt(c.fusedScore, 4)}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">{c.rankedPosition != null ? `#${c.rankedPosition}${c.rerankScore != null ? ` · ${fmt(c.rerankScore, 2)}` : ''}` : '–'}</td>
                         <td className="px-2 py-2" title={c.reason}>
                           <span className={`rounded-full px-2 py-0.5 font-medium ${DISPOSITION[c.disposition].cls}`}>
                             {DISPOSITION[c.disposition].text}{c.label ? ` ${c.label}` : ''}
                           </span>
-                          {c.reason && <span className="mt-0.5 block max-w-[14rem] text-muted">{c.reason}</span>}
+                          {c.reason && <span className="mt-0.5 block break-words text-muted">{c.reason}</span>}
                         </td>
                       </tr>
                     ))}

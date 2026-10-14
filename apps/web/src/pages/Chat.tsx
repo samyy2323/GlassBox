@@ -4,7 +4,6 @@ import { UploadCloud } from 'lucide-react'
 import { useLocation, useParams } from 'react-router-dom'
 import { AssistantMessage, UserMessage } from '../components/MessageView'
 import { Composer, type ComposerHandle } from '../components/Composer'
-import { Logo } from '../components/Logo'
 import { SourceDrawer, type SourceTarget } from '../components/SourceDrawer'
 import { api, ApiError, streamChat, type Citation } from '../lib/api'
 import { reduce, turnFromTrace } from '../lib/chatState'
@@ -139,8 +138,7 @@ export default function Chat() {
 
           {empty && !(traceId && past.isError) && (
             <div className="m-auto flex w-full animate-fade-up flex-col items-center py-8 text-center">
-              <Logo size={56} pulse />
-              <h1 className="mt-7 text-[2rem] font-semibold leading-[1.15] sm:text-[2.6rem]"><span className="text-gradient">How can I help with<br className="sm:hidden" /> your documents?</span></h1>
+              <h1 className="text-[2rem] font-semibold leading-[1.15] sm:text-[2.6rem]"><span className="text-gradient">How can I help with<br className="sm:hidden" /> your documents?</span></h1>
               <p className="mt-3.5 max-w-md text-[0.92rem] leading-relaxed text-muted">
                 {docs.isSuccess && ready.length > 0
                   ? 'I search what you have uploaded, cite every source, and tell you plainly when the answer is not there.'

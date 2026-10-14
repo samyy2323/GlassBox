@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom'
 import type { Citation } from '../lib/api'
 import { progressSteps, type Turn } from '../lib/chatState'
 import { RichText } from '../lib/richText'
-import { Logo } from './Logo'
 
 export function UserMessage({ text }: { text: string }) {
   return (
@@ -32,7 +31,7 @@ function CitationChip({ label, known, active, onClick }: { label: string; known:
       aria-label={`Open source ${n}`}
       aria-pressed={active}
       className={`mx-0.5 inline-flex h-[1.15rem] min-w-[1.15rem] items-center justify-center rounded-full border px-1 align-[0.12em] text-[10.5px] font-bold transition ${
-        active ? 'border-transparent bg-fg text-canvas' : 'border-fg/25 bg-fg/[0.07] text-fg hover:bg-fg hover:text-canvas'
+        active ? 'border-transparent bg-accent text-white' : 'border-accent/40 bg-accent/10 text-accent hover:bg-accent hover:text-white'
       }`}
     >
       {n}
@@ -105,7 +104,6 @@ export function AssistantMessage({ turn, isLast, activeLabel, onOpenSource, onRe
 
   return (
     <article className="flex animate-fade-up gap-3.5" aria-label="Assistant answer">
-      <div className="pt-0.5"><Logo size={28} pulse={streaming && turn.answer === ''} /></div>
       <div className="min-w-0 flex-1 space-y-4" aria-live={streaming ? 'polite' : 'off'} aria-busy={streaming}>
         {streaming && turn.answer === '' && (
           <div className="glass w-fit max-w-full space-y-3.5 rounded-2xl px-5 py-4">

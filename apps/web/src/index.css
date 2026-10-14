@@ -3,50 +3,58 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------ design tokens
-   Two themes, both strictly monochrome: white and black. Depth comes from frosted glass and soft grey light, never from hue.
-   Colours are channel triplets so Tailwind opacity modifiers (bg-fg/10) work. */
+   Two flat themes in the spirit of Claude, ChatGPT and Gemini: pure light and pure black. No gradients, no blur, no glow:
+   hierarchy comes from spacing, type, and a few quiet greys. Colours are channel triplets so bg-fg/10 style modifiers work. */
 :root {
-  --bg-rgb: 247 247 246;
-  --fg-rgb: 10 10 10;
-  --muted-rgb: 102 102 108;
+  --bg-rgb: 255 255 255;
+  --fg-rgb: 23 23 23;
+  --muted-rgb: 108 108 104;
+  --accent-rgb: 79 70 229;
+  --accent2-rgb: 13 148 136;
+  --ok-rgb: 22 163 74;
+  --warn-rgb: 217 119 6;
 
   --bg: rgb(var(--bg-rgb));
   --fg: rgb(var(--fg-rgb));
   --fg-muted: rgb(var(--muted-rgb));
 
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-strong: rgba(255, 255, 255, 0.86);
-  --glass-hover: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(10, 10, 10, 0.09);
-  --glass-shadow: 0 1px 2px rgba(10, 10, 10, 0.04), 0 12px 40px rgba(10, 10, 10, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  --line: rgba(10, 10, 10, 0.08);
-  --glow: rgba(10, 10, 10, 0.28);
-
-  --orb-1: #d4d4d8;
-  --orb-2: #e4e4e7;
-  --orb-3: #a1a1aa;
-  --orb-opacity: 0.7;
-  --scroll: rgba(10, 10, 10, 0.2);
+  --sidebar: #f8f8f6;
+  --surface: #ffffff;
+  --surface-2: #f3f3f0;
+  --hover: #efefec;
+  --bubble: #f1f1ee;
+  --line: #e7e7e3;
+  --line-strong: #d4d4cf;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --glow: rgba(23, 23, 23, 0.25);
+  --scroll: rgba(0, 0, 0, 0.18);
+  /* older names still used in markup */
+  --glass: var(--surface);
+  --glass-strong: var(--surface-2);
+  --glass-hover: var(--hover);
   color-scheme: light;
 }
 
 .dark {
-  --bg-rgb: 6 6 7;
-  --fg-rgb: 244 244 245;
-  --muted-rgb: 161 161 170;
+  --bg-rgb: 0 0 0;
+  --fg-rgb: 236 236 236;
+  --muted-rgb: 150 150 150;
+  --accent-rgb: 129 140 248;
+  --accent2-rgb: 45 212 191;
+  --ok-rgb: 74 222 128;
+  --warn-rgb: 251 191 36;
 
-  --glass: rgba(255, 255, 255, 0.05);
-  --glass-strong: rgba(255, 255, 255, 0.085);
-  --glass-hover: rgba(255, 255, 255, 0.09);
-  --glass-border: rgba(255, 255, 255, 0.11);
-  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --line: rgba(255, 255, 255, 0.08);
-  --glow: rgba(255, 255, 255, 0.3);
-
-  --orb-1: #52525b;
-  --orb-2: #3f3f46;
-  --orb-3: #71717a;
-  --orb-opacity: 0.34;
+  --sidebar: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #181818;
+  --hover: #1c1c1c;
+  --bubble: #1e1e1e;
+  --line: #262626;
+  --line-strong: #3a3a3a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px #262626;
+  --glow: rgba(236, 236, 236, 0.3);
   --scroll: rgba(255, 255, 255, 0.18);
   color-scheme: dark;
 }
@@ -74,11 +82,11 @@ h3 {
 }
 
 ::selection {
-  background: rgb(var(--fg-rgb) / 0.2);
+  background: rgb(var(--accent-rgb) / 0.3);
 }
 
 :focus-visible {
-  outline: 2px solid rgb(var(--fg-rgb) / 0.75);
+  outline: 2px solid rgb(var(--accent-rgb));
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -96,65 +104,62 @@ h3 {
   border-radius: 999px;
 }
 
-/* ------------------------------------------------------------------ glass surfaces */
+/* ------------------------------------------------------------------ surfaces */
 @layer components {
-  .glass {
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
-    backdrop-filter: blur(24px) saturate(140%);
+  /* the names stay so every page keeps working, but they are flat panels now */
+  .glass,
+  .glass-strong,
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
   }
-  .glass-strong {
-    background: var(--glass-strong);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    -webkit-backdrop-filter: blur(32px) saturate(150%);
-    backdrop-filter: blur(32px) saturate(150%);
+  .card {
+    border-radius: 1rem;
+    padding: 1.25rem;
   }
   .glass-interactive {
-    transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
   .glass-interactive:hover {
-    background: var(--glass-hover);
-    border-color: rgb(var(--fg-rgb) / 0.28);
-    transform: translateY(-2px);
+    background: var(--surface-2);
+    border-color: var(--line-strong);
   }
 
   /* the one accent: the inverse of the page (black on white, white on black) */
-  .btn-primary {
+  .btn-primary,
+  .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 0.9rem;
-    padding: 0.62rem 1.1rem;
+    border-radius: 0.85rem;
+    padding: 0.6rem 1.05rem;
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: -0.01em;
-    color: rgb(var(--bg-rgb));
-    background: var(--fg);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 24px rgb(var(--fg-rgb) / 0.18);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    color: #fff;
+    background: rgb(var(--accent-rgb));
+    transition: opacity 0.15s ease, transform 0.15s ease;
   }
-  .btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgb(0 0 0 / 0.25), 0 12px 30px rgb(var(--fg-rgb) / 0.25);
+  .btn-primary:hover:not(:disabled),
+  .btn:hover:not(:disabled) {
+    opacity: 0.86;
   }
   .btn-primary:active:not(:disabled) {
-    transform: translateY(0);
+    transform: scale(0.985);
   }
-  .btn-primary:disabled {
-    opacity: 0.35;
+  .btn-primary:disabled,
+  .btn:disabled {
+    opacity: 0.3;
     cursor: not-allowed;
-    box-shadow: none;
   }
 
   .btn-ghost {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    border-radius: 0.75rem;
+    border-radius: 0.7rem;
     padding: 0.45rem 0.7rem;
     font-size: 0.8125rem;
     font-weight: 500;
@@ -162,20 +167,18 @@ h3 {
     transition: background 0.15s ease, color 0.15s ease;
   }
   .btn-ghost:hover {
-    background: var(--glass-hover);
-    color: var(--fg);
+    background: var(--hover);
+    color: rgb(var(--accent-rgb));
   }
 
   .input-glass {
     width: 100%;
-    border-radius: 0.9rem;
-    border: 1px solid var(--glass-border);
-    background: var(--glass);
-    padding: 0.72rem 0.95rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    padding: 0.7rem 0.95rem;
     font-size: 0.92rem;
     color: var(--fg);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .input-glass::placeholder {
@@ -184,8 +187,8 @@ h3 {
   }
   .input-glass:focus {
     outline: none;
-    border-color: rgb(var(--fg-rgb) / 0.5);
-    box-shadow: 0 0 0 4px rgb(var(--fg-rgb) / 0.08);
+    border-color: rgb(var(--accent-rgb));
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.18);
   }
 
   .chip {
@@ -196,9 +199,8 @@ h3 {
     padding: 0.18rem 0.65rem;
     font-size: 0.72rem;
     font-weight: 600;
-    letter-spacing: 0;
-    border: 1px solid var(--glass-border);
-    background: var(--glass);
+    border: 1px solid var(--line);
+    background: var(--surface-2);
   }
 
   .kbd {
@@ -208,60 +210,33 @@ h3 {
     min-width: 1.35rem;
     padding: 0.05rem 0.35rem;
     border-radius: 0.4rem;
-    border: 1px solid var(--line);
-    background: var(--glass);
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
     font-size: 0.68rem;
     font-weight: 600;
     color: var(--fg-muted);
   }
 
-  /* section labels used across the app */
   .eyebrow {
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: var(--fg-muted);
+    color: rgb(var(--accent-rgb));
   }
 
+  /* coloured headline text on the flat background */
   .text-gradient {
-    background: linear-gradient(180deg, var(--fg) 30%, rgb(var(--fg-rgb) / 0.55));
+    background: linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent2-rgb)));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
-  /* shimmering placeholder used while an answer is being prepared */
   .skeleton {
-    background: linear-gradient(90deg, transparent, rgb(var(--fg-rgb) / 0.12), transparent) 0 0 / 200% 100%, var(--glass);
-    animation: shimmer 2.4s linear infinite;
+    background: linear-gradient(90deg, transparent, rgb(var(--fg-rgb) / 0.08), transparent) 0 0 / 200% 100%, var(--surface-2);
+    animation: shimmer 2.2s linear infinite;
     border-radius: 0.7rem;
-  }
-
-  /* shared by the X-Ray pages */
-  .card {
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
-    backdrop-filter: blur(24px) saturate(140%);
-    border-radius: 1.25rem;
-    padding: 1.25rem;
-  }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    border-radius: 0.85rem;
-    padding: 0.55rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: rgb(var(--bg-rgb));
-    background: var(--fg);
-  }
-  .btn:disabled {
-    opacity: 0.5;
   }
 
   /* rendered answer text */
@@ -292,15 +267,16 @@ h3 {
     padding-left: 0.2rem;
   }
   .prose-answer li::marker {
-    color: var(--fg-muted);
+    color: rgb(var(--accent-rgb));
   }
   .prose-answer code {
     font-family: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
     font-size: 0.85em;
     padding: 0.12rem 0.42rem;
     border-radius: 0.4rem;
-    background: var(--glass-strong);
-    border: 1px solid var(--line);
+    background: rgb(var(--accent-rgb) / 0.1);
+    color: rgb(var(--accent-rgb));
+    border: 1px solid rgb(var(--accent-rgb) / 0.25);
   }
 }
 

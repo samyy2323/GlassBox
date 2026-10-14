@@ -1,6 +1,5 @@
 import type { DocStatus } from '../lib/api'
 
-// Text stays in the theme's own black or white; only the small dot carries meaning, because "failed" has to be unmistakable.
 const STYLE: Record<DocStatus, { label: string; dot: string }> = {
   UPLOADED: { label: 'Queued', dot: 'bg-fg/40' },
   PROCESSING: { label: 'Processing', dot: 'bg-amber-400 animate-pulse' },

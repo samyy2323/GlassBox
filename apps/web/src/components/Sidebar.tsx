@@ -16,7 +16,7 @@ interface Props {
 
 const navLink = ({ isActive }: { isActive: boolean }) =>
   `group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[0.84rem] font-medium transition-colors ${
-    isActive ? 'bg-fg/[0.08] text-fg' : 'text-muted hover:bg-fg/[0.05] hover:text-fg'
+    isActive ? 'bg-accent/15 text-accent' : 'text-muted hover:bg-fg/[0.05] hover:text-fg'
   }`
 
 export function Sidebar({ open, onClose, onOpenPalette, theme, onToggleTheme }: Props) {
@@ -37,7 +37,7 @@ export function Sidebar({ open, onClose, onOpenPalette, theme, onToggleTheme }: 
       {open && <button type="button" aria-label="Close menu" className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden" onClick={onClose} tabIndex={-1} />}
       <aside
         aria-label="Sidebar"
-        className={`glass-strong fixed inset-y-0 left-0 z-40 flex w-[17.5rem] flex-col rounded-r-[1.75rem] p-3 transition-transform duration-300 lg:static lg:m-3 lg:mr-0 lg:translate-x-0 lg:rounded-[1.75rem] ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[17.5rem] flex-col border-r border-[var(--line)] bg-[var(--sidebar)] p-3 transition-transform duration-300 lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="px-2 pb-4 pt-2"><Wordmark /></div>
 
@@ -76,7 +76,7 @@ export function Sidebar({ open, onClose, onOpenPalette, theme, onToggleTheme }: 
                       to={`/chat/${t.id}`}
                       onClick={onClose}
                       title={t.question}
-                      className={`block truncate rounded-lg px-3 py-1.5 text-[0.82rem] transition-colors ${traceId === t.id ? 'bg-fg/[0.08] font-medium text-fg' : 'text-muted hover:bg-fg/[0.05] hover:text-fg'}`}
+                      className={`block truncate rounded-lg px-3 py-1.5 text-[0.82rem] transition-colors ${traceId === t.id ? 'bg-accent/15 font-medium text-accent' : 'text-muted hover:bg-fg/[0.05] hover:text-fg'}`}
                     >
                       {t.question}
                     </NavLink>

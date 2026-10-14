@@ -97,7 +97,7 @@ export function Shell() {
       <Sidebar open={menu} onClose={closeMenu} onOpenPalette={() => setPalette(true)} theme={theme} onToggleTheme={toggleTheme} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 p-3 lg:hidden">
-          <button className="btn-ghost glass !rounded-xl !p-2.5" onClick={() => setMenu(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
+          <button className="btn-ghost !rounded-xl !p-2.5" onClick={() => setMenu(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
           <Wordmark />
         </header>
         <main className="flex min-h-0 flex-1 flex-col">

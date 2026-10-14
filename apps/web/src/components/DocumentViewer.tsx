@@ -5,9 +5,9 @@ import { queryKeys } from '../lib/queryKeys'
 import { pageBlocks, segmentText, type Highlight, type HighlightKind } from '../lib/highlight'
 
 const MARK: Record<HighlightKind, string> = {
-  primary: 'bg-fg text-canvas shadow-[0_0_0_3px_rgb(var(--fg-rgb)/0.18)]',
-  secondary: 'bg-fg/20 text-fg',
-  candidate: 'bg-fg/10 text-fg',
+  primary: 'bg-amber-300 text-black shadow-[0_0_0_3px_rgb(252_211_77/0.35)]',
+  secondary: 'bg-accent/30 text-fg',
+  candidate: 'bg-accent2/20 text-fg',
 }
 
 interface Props {

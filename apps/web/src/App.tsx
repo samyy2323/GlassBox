@@ -1,8 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Aurora } from './components/Aurora'
-import { Logo } from './components/Logo'
 import { Shell } from './components/Shell'
+import { Splash } from './components/Splash'
 import { AuthProvider, useAuth } from './lib/auth'
 import { UploadsProvider } from './lib/uploads'
 import { WorkspaceProvider } from './lib/workspace'
@@ -18,10 +17,7 @@ function Protected() {
   const { user, loading } = useAuth()
   if (loading) {
     return (
-      <div className="grid h-dvh place-items-center">
-        <Aurora />
-        <Logo size={56} pulse />
-      </div>
+      <div className="grid h-dvh place-items-center bg-canvas" aria-busy="true" />
     )
   }
   if (!user) return <Navigate to="/login" replace />
@@ -37,6 +33,7 @@ function Protected() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <Splash />
       <AuthProvider>
         <BrowserRouter>
           <Routes>

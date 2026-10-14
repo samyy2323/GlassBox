@@ -14,7 +14,7 @@ What works today: upload almost any document (PDF, Word, Excel, PowerPoint, Open
 
 ## The interface
 
-A ChatGPT-style chat with a sidebar of past conversations, live progress while an answer is prepared, clickable citations that open the exact passage in a slide-over, a library of documents with drag-anywhere upload, X-Ray for every answer, and a Ctrl K command palette. It comes in two themes only, black and white, built as frosted glass over soft grey light.
+A ChatGPT-style chat with a sidebar of past conversations, live progress while an answer is prepared, clickable citations that open the exact passage in a slide-over, a library of documents with drag-anywhere upload, X-Ray for every answer, and a Ctrl K command palette. It comes in two flat themes, pure black and pure white, with a single indigo and teal accent for text, buttons and highlights, and a 3-second splash screen on load.
 
 ## Run it
 

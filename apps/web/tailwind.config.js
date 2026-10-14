@@ -9,6 +9,10 @@ export default {
         fg: 'rgb(var(--fg-rgb) / <alpha-value>)',
         muted: 'rgb(var(--muted-rgb) / <alpha-value>)',
         canvas: 'rgb(var(--bg-rgb) / <alpha-value>)',
+        accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
+        accent2: 'rgb(var(--accent2-rgb) / <alpha-value>)',
+        ok: 'rgb(var(--ok-rgb) / <alpha-value>)',
+        warn: 'rgb(var(--warn-rgb) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['"Inter var"', 'Inter', 'ui-sans-serif', 'system-ui', '"Segoe UI Variable"', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
