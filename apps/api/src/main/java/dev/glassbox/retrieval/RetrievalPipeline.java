@@ -36,7 +36,18 @@ public class RetrievalPipeline {
     }
 
     public Result retrieve(UUID workspaceId, String query, PipelineConfig config) {
-        List<Span> spans = new ArrayList<>();
+        return retrieve(workspaceId, query, config, span -> { });
+    }
+
+    /** {@code onSpan} is called as each stage finishes, so a caller can stream the trace while the pipeline runs. */
+    public Result retrieve(UUID workspaceId, String query, PipelineConfig config, java.util.function.Consumer<Span> onSpan) {
+        List<Span> spans = new ArrayList<>() {
+            @Override
+            public boolean add(Span s) {
+                onSpan.accept(s);
+                return super.add(s);
+            }
+        };
         RetrievalParams params = config.retrieval();
 
         UUID chunkingId = chunkings.defaultChunkingId(workspaceId).orElse(null);

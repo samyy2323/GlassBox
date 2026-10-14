@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, setAccessToken, type AuthResponse, type User } from './api'
+import { api, onAuthLost, setAccessToken, setWorkspaceId, type AuthResponse, type User } from './api'
 
 interface AuthState {
   user: User | null
@@ -31,6 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [accept])
 
+  // If a later request cannot refresh the session, fall back to the login page.
+  useEffect(() => {
+    onAuthLost(() => {
+      setAccessToken(null)
+      setWorkspaceId(null)
+      setUser(null)
+    })
+    return () => onAuthLost(null)
+  }, [])
+
   const signIn = useCallback(
     async (email: string, password: string, register: boolean) =>
       accept(await (register ? api.register(email, password) : api.login(email, password))),
@@ -40,12 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await api.logout().catch(() => undefined)
     setAccessToken(null)
+    setWorkspaceId(null)
     setUser(null)
   }, [])
 
   return <Ctx.Provider value={{ user, loading, signIn, signOut }}>{children}</Ctx.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthState {
   const v = useContext(Ctx)
   if (!v) throw new Error('useAuth outside AuthProvider')

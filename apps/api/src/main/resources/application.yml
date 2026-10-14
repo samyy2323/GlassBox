@@ -45,6 +45,26 @@ glassbox:
   limits:
     max-documents: 50
     max-file-bytes: 26214400
+  llm:
+    # Any OpenAI-compatible chat endpoint: Ollama (default), Groq, OpenRouter, Gemini's compatible API, vLLM.
+    base-url: ${GLASSBOX_LLM_BASE_URL:http://localhost:11434}
+    model: ${GLASSBOX_LLM_MODEL:llama3.2:3b}
+    api-key: ${GLASSBOX_LLM_API_KEY:}
+    temperature: 0.0
+    max-tokens: 400
+    max-attempts: 3
+    backoff: 500ms
+    read-timeout: 180s
+    # Protects a small free server: one generation at a time, a short wait, then HTTP 429.
+    max-concurrent: 1
+    queue-wait: 2s
+    rate-per-minute: 20
+  chat:
+    reranker: NONE
+    top-n: 5
+    # In this project's token units (see TokenIndex), which run below a real tokenizer's count.
+    # 2000 keeps a prompt inside a 4096-token context window with room for the answer.
+    token-budget: 2000
   embed:
     default-model: bge-small-en-v1.5
     max-attempts: 4

@@ -31,8 +31,14 @@ services:
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set in .env}
       GLASSBOX_CORS_ORIGINS: http://localhost:8080
       GLASSBOX_SIDECAR_URL: http://ml-sidecar:8000
+      # Any OpenAI-compatible endpoint. Default: Ollama running on the host machine.
+      GLASSBOX_LLM_BASE_URL: ${GLASSBOX_LLM_BASE_URL:-http://host.docker.internal:11434}
+      GLASSBOX_LLM_MODEL: ${GLASSBOX_LLM_MODEL:-llama3.2:3b}
+      GLASSBOX_LLM_API_KEY: ${GLASSBOX_LLM_API_KEY:-}
       SPRING_PROFILES_ACTIVE: api
       GLASSBOX_STORAGE_DIR: /data/files
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - files:/data/files
     depends_on:
@@ -62,6 +68,19 @@ services:
       ml-sidecar:
         condition: service_healthy
 
+  # Optional self-contained LLM: docker compose --profile ollama up, then
+  #   docker compose exec ollama ollama pull llama3.2:3b
+  # and set GLASSBOX_LLM_BASE_URL=http://ollama:11434 in .env.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_CONTEXT_LENGTH: "4096"
+    volumes:
+      - ollama:/root/.ollama
+
   web:
     build:
       context: ../apps/web
@@ -73,3 +92,4 @@ services:
 volumes:
   pgdata:
   files:
+  ollama:

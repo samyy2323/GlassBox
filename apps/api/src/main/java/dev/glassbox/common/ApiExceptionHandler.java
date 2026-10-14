@@ -7,8 +7,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
-    public ProblemDetail handle(ApiException e) {
-        return ProblemDetail.forStatusAndDetail(e.status(), e.getMessage());
+    public org.springframework.http.ResponseEntity<ProblemDetail> handle(ApiException e) {
+        var response = org.springframework.http.ResponseEntity.status(e.status());
+        if (e.retryAfterSeconds() != null) response = response.header("Retry-After", String.valueOf(e.retryAfterSeconds()));
+        return response.body(ProblemDetail.forStatusAndDetail(e.status(), e.getMessage()));
     }
 
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
