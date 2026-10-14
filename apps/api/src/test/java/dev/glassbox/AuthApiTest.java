@@ -140,7 +140,8 @@ class AuthApiTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"label\":\"x\",\"scopes\":[\"read\"]}"))
                 .andExpect(status().isForbidden());
         // The key is bound to its own workspace.
-        String otherWs = getJson("/api/workspaces", viewer.token()).get(0).get("id").asText();
+        String otherWs = null; // the viewer's own personal workspace (the one that is not the owner's)
+        for (JsonNode w : getJson("/api/workspaces", viewer.token())) if (!w.get("id").asText().equals(ws)) otherWs = w.get("id").asText();
         mvc.perform(get("/api/workspaces/" + otherWs + "/members").header("X-API-Key", key)).andExpect(status().isNotFound());
         mvc.perform(get("/api/workspaces").header("X-API-Key", key + "tampered")).andExpect(status().isUnauthorized());
     }
