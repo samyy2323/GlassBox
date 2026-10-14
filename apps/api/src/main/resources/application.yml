@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: glassbox
+  datasource:
+    # Runtime connection: glassbox_app (not the table owner, no BYPASSRLS).
+    url: ${GLASSBOX_DB_URL:jdbc:postgresql://localhost:5432/glassbox}
+    username: ${GLASSBOX_APP_USER:glassbox_app}
+    password: ${GLASSBOX_APP_PASSWORD:}
+  flyway:
+    enabled: false          # only the api profile migrates
+    locations: classpath:db/migrations
+    # Migrations run as the table owner, never as the runtime role.
+    url: ${GLASSBOX_DB_URL:jdbc:postgresql://localhost:5432/glassbox}
+    user: ${GLASSBOX_OWNER_USER:glassbox_owner}
+    password: ${GLASSBOX_OWNER_PASSWORD:}
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+glassbox:
+  jwt:
+    secret: ${GLASSBOX_JWT_SECRET:}
+    access-ttl: 15m
+  refresh:
+    ttl: 14d
+    secure-cookie: ${GLASSBOX_COOKIE_SECURE:false}
+  cors:
+    allowed-origins: ${GLASSBOX_CORS_ORIGINS:http://localhost:5173}

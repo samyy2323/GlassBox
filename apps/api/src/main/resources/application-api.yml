@@ -1,0 +1,5 @@
+spring:
+  flyway:
+    enabled: true           # SPEC 14: Flyway runs at API startup only
+server:
+  port: 8080
