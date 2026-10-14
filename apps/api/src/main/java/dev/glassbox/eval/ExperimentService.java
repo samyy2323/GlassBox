@@ -15,7 +15,6 @@ import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.rerank.Reranker;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalParams;
-import dev.glassbox.stats.Cohen;
 import dev.glassbox.tenancy.Role;
 import dev.glassbox.tenancy.Tx;
 import java.nio.charset.StandardCharsets;
@@ -52,12 +51,13 @@ public class ExperimentService {
     private final JobQueue queue;
     private final LlmProvider llm;
     private final NliProvider nli;
+    private final CalibrationService calibration;
     private final String embeddingModel;
     private final int seed;
     private final int maxTokens;
     private final double promptUsdPerMillion;
 
-    public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, LlmProvider llm, NliProvider nli,
+    public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, LlmProvider llm, NliProvider nli, CalibrationService calibration,
                              @Value("${glassbox.embed.default-model}") String embeddingModel, @Value("${glassbox.eval.seed}") int seed,
                              @Value("${glassbox.llm.max-tokens}") int maxTokens, @Value("${glassbox.cost.prompt-usd-per-million}") double promptUsdPerMillion) {
         this.tx = tx;
@@ -65,6 +65,7 @@ public class ExperimentService {
         this.queue = queue;
         this.llm = llm;
         this.nli = nli;
+        this.calibration = calibration;
         this.embeddingModel = embeddingModel;
         this.seed = seed;
         this.maxTokens = maxTokens;
@@ -404,13 +405,8 @@ public class ExperimentService {
      * rubric version), uncalibrated (measured and below that), or unknown (never calibrated). Also warns that the judge is the generator.
      */
     JudgeInfo judgeInfo(JdbcTemplate j, UUID ws) {
-        Map<String, JudgeMetric> metrics = new LinkedHashMap<>();
-        for (String metric : List.of(Metrics.FAITHFULNESS, Metrics.CORRECTNESS, Metrics.RELEVANCE)) {
-            var rows = j.query("SELECT kappa, n FROM judge_calibrations WHERE judge_model = ? AND rubric_version = ? AND metric = ?",
-                    (rs, n) -> new JudgeMetric(rs.getDouble("kappa") >= Cohen.TRUSTED_KAPPA ? "calibrated" : "uncalibrated", rs.getDouble("kappa"), rs.getInt("n")),
-                    llm.model(), Judge.RUBRIC_VERSION, metric);
-            metrics.put(metric, rows.isEmpty() ? new JudgeMetric("unknown", null, null) : rows.get(0));
-        }
+        Map<String, JudgeMetric> all = calibration.statuses(j), metrics = new LinkedHashMap<>();
+        for (String metric : List.of(Metrics.FAITHFULNESS, Metrics.CORRECTNESS, Metrics.RELEVANCE)) metrics.put(metric, all.get(metric));
         List<String> warnings = new ArrayList<>();
         warnings.add("The model that writes the answers (" + llm.model() + ") also judges them. Models tend to favour their own output, so treat judged scores with care.");
         return new JudgeInfo(llm.model(), Judge.RUBRIC_VERSION, llm.model(), nli.model(), true, metrics, warnings);
