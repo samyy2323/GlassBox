@@ -1,0 +1,14 @@
+.env
+*.log
+.idea/
+.vscode/
+.DS_Store
+
+# api
+apps/api/target/
+*.class
+
+# web
+apps/web/node_modules/
+apps/web/dist/
+node_modules/
