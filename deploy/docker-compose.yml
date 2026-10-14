@@ -30,6 +30,7 @@ services:
       GLASSBOX_OWNER_PASSWORD: ${GLASSBOX_OWNER_PASSWORD:?set in .env}
       GLASSBOX_JWT_SECRET: ${GLASSBOX_JWT_SECRET:?set in .env}
       GLASSBOX_CORS_ORIGINS: http://localhost:8080
+      GLASSBOX_SIDECAR_URL: http://ml-sidecar:8000
       SPRING_PROFILES_ACTIVE: api
       GLASSBOX_STORAGE_DIR: /data/files
     volumes:
@@ -39,6 +40,11 @@ services:
         condition: service_healthy
     ports:
       - "8081:8080"
+
+  ml-sidecar:
+    build:
+      context: ../apps/ml-sidecar
+    # Embeddings and reranking; models are baked into the image. Healthcheck is defined in the Dockerfile.
 
   worker:
     build:
@@ -52,6 +58,8 @@ services:
       - files:/data/files
     depends_on:
       api:
+        condition: service_healthy
+      ml-sidecar:
         condition: service_healthy
 
   web:

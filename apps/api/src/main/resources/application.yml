@@ -45,6 +45,17 @@ glassbox:
   limits:
     max-documents: 50
     max-file-bytes: 26214400
+  embed:
+    default-model: bge-small-en-v1.5
+    max-attempts: 4
+    backoff: 500ms
+    batch-size: 64
+    sidecar:
+      enabled: true
+      url: ${GLASSBOX_SIDECAR_URL:http://localhost:8000}
+    openai:
+      api-key: ${GLASSBOX_OPENAI_API_KEY:}
+      base-url: ${GLASSBOX_OPENAI_BASE_URL:https://api.openai.com}
   ingest:
     chunk-size: 512
     parse-timeout: 60s

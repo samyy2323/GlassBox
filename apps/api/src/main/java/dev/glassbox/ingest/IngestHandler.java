@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.chunking.Chunker;
 import dev.glassbox.chunking.Chunker.ChunkOut;
 import dev.glassbox.chunking.RecursiveChunker;
+import dev.glassbox.embed.EmbeddingProviders;
+import dev.glassbox.embed.EmbeddingService;
 import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
 import dev.glassbox.parse.DocumentParser;
@@ -36,6 +38,8 @@ public class IngestHandler implements JobHandler {
     private static final Logger log = LoggerFactory.getLogger(IngestHandler.class);
 
     private final Tx tx;
+    private final EmbeddingService embeddings;
+    private final EmbeddingProviders providers;
     private final DocumentStorage storage;
     private final ObjectMapper json;
     private final int chunkSize;
@@ -46,10 +50,12 @@ public class IngestHandler implements JobHandler {
         return t;
     });
 
-    public IngestHandler(Tx tx, DocumentStorage storage, ObjectMapper json,
+    public IngestHandler(Tx tx, EmbeddingService embeddings, EmbeddingProviders providers, DocumentStorage storage, ObjectMapper json,
                          @Value("${glassbox.ingest.chunk-size}") int chunkSize,
                          @Value("${glassbox.ingest.parse-timeout}") Duration parseTimeout) {
         this.tx = tx;
+        this.embeddings = embeddings;
+        this.providers = providers;
         this.storage = storage;
         this.json = json;
         this.chunkSize = chunkSize;
@@ -96,9 +102,13 @@ public class IngestHandler implements JobHandler {
         // 3. Chunk and persist.
         Chunker chunker = new RecursiveChunker(chunkSize, true);
         List<ChunkOut> chunks = chunker.chunk(parsed);
-        persist(ws, docId, target.versionId(), parsed, chunker, chunks);
+        UUID chunkingId = persist(ws, docId, target.versionId(), parsed, chunker, chunks);
 
-        // 4. Done. (Embedding is added between persist and READY.)
+        // 4. Embed (idempotent; reuses vectors of identical text). A provider outage fails the job, which retries.
+        var embedded = embeddings.embedChunks(ws, target.versionId(), chunkingId, providers.defaultModel());
+        log.info("ingest {}: {} chunks, {} reused, {} texts embedded", job.id(), embedded.chunks(), embedded.reused(), embedded.textsEmbedded());
+
+        // 5. Done.
         tx.workspace(ws, null, j -> {
             j.update("UPDATE documents SET status = 'READY' WHERE id = ? AND version = ?", docId, version);
             DocumentEvents.statusChanged(j, ws, docId, "READY");
@@ -128,10 +138,10 @@ public class IngestHandler implements JobHandler {
         }
     }
 
-    private void persist(UUID ws, UUID docId, UUID versionId, ParsedDocument parsed, Chunker chunker, List<ChunkOut> chunks) throws Exception {
+    private UUID persist(UUID ws, UUID docId, UUID versionId, ParsedDocument parsed, Chunker chunker, List<ChunkOut> chunks) throws Exception {
         String params = json.writeValueAsString(chunker.params());
         List<ParsedDocument.Section> sections = parsed.sections();
-        tx.workspace(ws, null, j -> {
+        return tx.workspace(ws, null, j -> {
             Integer[] pages = java.util.Arrays.stream(parsed.pageStarts()).boxed().toArray(Integer[]::new);
             j.update(con -> {
                 var ps = con.prepareStatement("UPDATE document_versions SET normalized_text = ?, page_starts = ? WHERE id = ?");
@@ -181,7 +191,7 @@ public class IngestHandler implements JobHandler {
                         ps.setInt(10, c.end());
                         ps.setObject(11, c.page());
                     });
-            return null;
+            return chunkingId;
         });
     }
 

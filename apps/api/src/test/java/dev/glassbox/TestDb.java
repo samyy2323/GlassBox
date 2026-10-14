@@ -50,6 +50,7 @@ public final class TestDb {
         r.add("spring.flyway.password", () -> OWNER_PW);
         r.add("glassbox.jwt.secret", () -> "test-secret-test-secret-test-secret-123");
         r.add("glassbox.storage.dir", () -> STORAGE.toString());
+        r.add("glassbox.embed.sidecar.enabled", () -> "false"); // tests use FakeEmbeddingProvider
     }
 
     public static final java.nio.file.Path STORAGE;

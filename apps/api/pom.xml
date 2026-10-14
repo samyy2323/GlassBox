@@ -25,6 +25,7 @@
     <jsoup.version>1.23.2</jsoup.version>
     <commonmark.version>0.24.0</commonmark.version>
     <jqwik.version>1.9.3</jqwik.version>
+    <wiremock.version>3.13.2</wiremock.version>
   </properties>
 
   <dependencies>
@@ -114,6 +115,12 @@
       <version>${commonmark.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>${wiremock.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>net.jqwik</groupId>
       <artifactId>jqwik</artifactId>

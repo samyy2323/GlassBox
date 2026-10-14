@@ -91,8 +91,11 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO sections (workspace_id, document_id, document_version_id, ordinal, char_start, char_end, text) "
                     + "VALUES (?, ?, ?, 0, 0, 5, ?)", ws, doc, ver, canary);
             exec(c, "INSERT INTO chunkings (id, workspace_id, strategy, params) VALUES (?, ?, 'fixed', ?::jsonb)", chunking, ws, "{\"c\":\"" + canary + "\"}");
-            exec(c, "INSERT INTO chunks (workspace_id, document_id, document_version_id, chunking_id, ordinal, text, token_count, char_start, char_end) "
-                    + "VALUES (?, ?, ?, ?, 0, ?, 1, 0, 5)", ws, doc, ver, chunking, canary);
+            UUID chunk = UUID.randomUUID();
+            exec(c, "INSERT INTO chunks (id, workspace_id, document_id, document_version_id, chunking_id, ordinal, text, token_count, char_start, char_end) "
+                    + "VALUES (?, ?, ?, ?, ?, 0, ?, 1, 0, 5)", chunk, ws, doc, ver, chunking, canary);
+            exec(c, "INSERT INTO embeddings (chunk_id, workspace_id, model, dim, vector, content_hash) VALUES (?, ?, 'seed-model', 3, '[1,2,3]', ?)",
+                    chunk, ws, "hash-" + canary);
             exec(c, "INSERT INTO jobs (workspace_id, type, payload, idempotency_key) VALUES (?, 'T', ?::jsonb, ?)", ws, "{\"c\":\"" + canary + "\"}", "k-" + canary);
             return null;
         });
