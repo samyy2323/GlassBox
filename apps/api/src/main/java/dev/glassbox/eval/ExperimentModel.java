@@ -1,5 +1,6 @@
 package dev.glassbox.eval;
 
+import dev.glassbox.retrieval.Chunking;
 import dev.glassbox.retrieval.PipelineConfig;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -12,7 +13,7 @@ public final class ExperimentModel {
 
     /** One configuration as a user writes it; everything but the name has a default. */
     public record ConfigInput(String name, String mode, Integer kFused, Integer rrfK, Double wVec, Double wKw, String keywordMatch,
-                              String reranker, Integer topN, Integer tokenBudget) {}
+                              String reranker, Integer topN, Integer tokenBudget, Chunking chunking, String embeddingModel) {}
 
     public record Estimate(int questions, int staleQuestions, int runs, int retrievalCalls, int llmCalls, long estimatedTokens, double estimatedUsd, List<String> notes) {}
 

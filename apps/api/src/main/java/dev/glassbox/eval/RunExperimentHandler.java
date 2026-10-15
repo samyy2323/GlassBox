@@ -7,6 +7,7 @@ import dev.glassbox.eval.ExperimentModel.RunComparison;
 import dev.glassbox.eval.ExperimentModel.RunView;
 import dev.glassbox.eval.RetrievalMetrics.Gold;
 import dev.glassbox.eval.RetrievalMetrics.Ref;
+import dev.glassbox.index.IndexService;
 import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
 import dev.glassbox.jobs.JobQueue;
@@ -47,8 +48,11 @@ public class RunExperimentHandler implements JobHandler {
     private final JobQueue queue;
     private final ExperimentService experiments;
     private final FullScorer scorer;
+    private final IndexService indexes;
 
-    public RunExperimentHandler(Tx tx, ObjectMapper json, RetrievalPipeline pipeline, JobQueue queue, ExperimentService experiments, FullScorer scorer) {
+    public RunExperimentHandler(Tx tx, ObjectMapper json, RetrievalPipeline pipeline, JobQueue queue, ExperimentService experiments, FullScorer scorer,
+                                IndexService indexes) {
+        this.indexes = indexes;
         this.tx = tx;
         this.json = json;
         this.pipeline = pipeline;
@@ -82,6 +86,14 @@ public class RunExperimentHandler implements JobHandler {
         List<RunRow> runs = tx.workspace(ws, null, j -> j.query("SELECT r.id, r.label, r.status, c.config::text AS config FROM runs r JOIN pipeline_configs c ON c.id = r.config_id "
                 + "WHERE r.experiment_id = ? ORDER BY r.ordinal", (rs, n) -> new RunRow(rs.getObject("id", UUID.class), rs.getString("label"), rs.getString("status"),
                 rs.getString("config")), experimentId));
+
+        // Chunkings and embedding models the uploads did not create are built first, for every document, so runs compare pipelines and not corpora.
+        List<PipelineConfig> configs = new ArrayList<>();
+        for (RunRow run : runs) if (!run.status().equals("DONE")) configs.add(json.readValue(run.config(), PipelineConfig.class));
+        for (IndexService.Need need : indexes.needs(configs)) {
+            if (cancelled(ws, experimentId)) return;
+            indexes.ensure(ws, need, () -> queue.heartbeat(job));
+        }
 
         for (RunRow run : runs) {
             if (run.status().equals("DONE")) continue;

@@ -29,9 +29,11 @@ public class RetrievalPipeline {
     private final HybridRetriever retriever;
     private final Rerankers rerankers;
     private final ContextBuilder contextBuilder;
+    private final ParentExpander parents;
 
     public RetrievalPipeline(ChunkingResolver chunkings, EmbeddingProviders embeddings, HybridRetriever retriever,
-                             Rerankers rerankers, ContextBuilder contextBuilder) {
+                             Rerankers rerankers, ContextBuilder contextBuilder, ParentExpander parents) {
+        this.parents = parents;
         this.chunkings = chunkings;
         this.embeddings = embeddings;
         this.retriever = retriever;
@@ -54,7 +56,7 @@ public class RetrievalPipeline {
         };
         RetrievalParams params = config.retrieval();
 
-        UUID chunkingId = chunkings.defaultChunkingId(workspaceId).orElse(null);
+        UUID chunkingId = chunkings.resolve(workspaceId, config.chunking()).orElse(null);
         if (chunkingId == null) { // nothing ingested yet
             Context empty = contextBuilder.build(List.of(), config.tokenBudget());
             return new Result(query, null, config, List.of(), List.of(), List.of(), empty, spans);
@@ -78,6 +80,12 @@ public class RetrievalPipeline {
         List<Candidate> reranked = reranker.rerank(query, pool, pool.size());
         List<Candidate> ranked = reranked.subList(0, Math.min(config.topN(), reranked.size()));
         spans.add(span("rerank", t, Map.of("reranker", config.reranker(), "in", pool.size(), "out", ranked.size())));
+
+        if (config.chunking() != null && config.chunking().parentChild()) { // the prompt gets the parent of each matched child
+            t = System.nanoTime();
+            ranked = parents.expand(workspaceId, ranked);
+            spans.add(span("parent_expansion", t, Map.of("out", ranked.size())));
+        }
 
         t = System.nanoTime();
         Context context = contextBuilder.build(ranked, config.tokenBudget());

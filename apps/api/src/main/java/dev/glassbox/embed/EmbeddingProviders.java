@@ -21,6 +21,14 @@ public class EmbeddingProviders {
         return defaultModel;
     }
 
+    public boolean has(String modelId) {
+        return byModel.containsKey(modelId);
+    }
+
+    public java.util.Set<String> available() {
+        return byModel.keySet();
+    }
+
     public EmbeddingProvider get(String modelId) {
         EmbeddingProvider p = byModel.get(modelId);
         if (p == null) {

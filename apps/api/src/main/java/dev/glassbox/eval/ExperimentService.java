@@ -8,11 +8,17 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.auth.Principal;
 import dev.glassbox.common.ApiException;
+import dev.glassbox.chunking.Chunker;
+import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.eval.ExperimentModel.*;
+import dev.glassbox.index.IndexService;
 import dev.glassbox.generate.LlmProvider;
 import dev.glassbox.generate.PromptBuilder;
 import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.rerank.Reranker;
+import dev.glassbox.retrieval.Chunking;
+import dev.glassbox.retrieval.ChunkingResolver;
+import dev.glassbox.retrieval.HybridSql;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalParams;
 import dev.glassbox.tenancy.Role;
@@ -53,11 +59,15 @@ public class ExperimentService {
     private final NliProvider nli;
     private final CalibrationService calibration;
     private final String embeddingModel;
+    private final ChunkingResolver chunkings;
+    private final EmbeddingProviders providers;
+    private final IndexService indexes;
     private final int seed;
     private final int maxTokens;
     private final double promptUsdPerMillion;
 
     public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, LlmProvider llm, NliProvider nli, CalibrationService calibration,
+                             ChunkingResolver chunkings, EmbeddingProviders providers, IndexService indexes,
                              @Value("${glassbox.embed.default-model}") String embeddingModel, @Value("${glassbox.eval.seed}") int seed,
                              @Value("${glassbox.llm.max-tokens}") int maxTokens, @Value("${glassbox.cost.prompt-usd-per-million}") double promptUsdPerMillion) {
         this.tx = tx;
@@ -67,6 +77,9 @@ public class ExperimentService {
         this.nli = nli;
         this.calibration = calibration;
         this.embeddingModel = embeddingModel;
+        this.chunkings = chunkings;
+        this.providers = providers;
+        this.indexes = indexes;
         this.seed = seed;
         this.maxTokens = maxTokens;
         this.promptUsdPerMillion = promptUsdPerMillion;
@@ -86,8 +99,24 @@ public class ExperimentService {
         int topN = within(in.topN(), 5, 1, 50, "topN");
         int budget = within(in.tokenBudget(), 2000, 100, 32000, "tokenBudget");
         int pool = Math.max(50, kFused);
-        RetrievalParams params = new RetrievalParams(mode, embeddingModel, pool, pool, rrfK, wVec, wKw, kFused, 100, keyword);
-        return new PipelineConfig(params, reranker, Math.max(50, topN), topN, budget);
+        String model = in.embeddingModel() == null || in.embeddingModel().isBlank() ? embeddingModel : in.embeddingModel().strip();
+        if (!HybridSql.MODEL_DIMS.containsKey(model) || !providers.has(model)) {
+            throw ApiException.badRequest("embeddingModel must be one of " + providers.available());
+        }
+        Chunking chunking;
+        try {
+            chunking = in.chunking();
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest(e.getMessage());
+        }
+        // The chunking every upload gets is stored as "no chunking named", so its config (and hash) is the one P3 experiments already have.
+        if (chunking != null && sameChunker(chunking.chunker(), chunkings.defaultChunker())) chunking = null;
+        RetrievalParams params = new RetrievalParams(mode, model, pool, pool, rrfK, wVec, wKw, kFused, 100, keyword);
+        return new PipelineConfig(params, reranker, Math.max(50, topN), topN, budget, chunking);
+    }
+
+    private static boolean sameChunker(Chunker a, Chunker b) {
+        return a.strategy().equals(b.strategy()) && a.params().equals(b.params());
     }
 
     private static <E extends Enum<E>> E parse(Class<E> type, String value, E fallback, String field) {
@@ -181,6 +210,10 @@ public class ExperimentService {
                 notes.add("The model that writes the answers (" + llm.model() + ") also acts as judge, and models tend to favour their own output.");
             } else {
                 notes.add("Retrieval only: no text is generated, so this costs no model tokens and runs in seconds.");
+            }
+            for (IndexService.Need need : indexes.needs(validated)) {
+                String line = indexes.describe(ws, need);
+                if (line != null) notes.add(line);
             }
             Map<String, Object> e = estimateFor(mode, loaded.questions().size(), validated.size());
             return new Estimate(loaded.questions().size(), loaded.stale(), validated.size(), (Integer) e.get("retrievalCalls"), ((Number) e.get("llmCalls")).intValue(),

@@ -32,9 +32,9 @@ public class EmbeddingService {
     public Result embedChunks(UUID ws, UUID versionId, UUID chunkingId, String model) {
         EmbeddingProvider provider = providers.get(model);
 
-        int total = count(ws, "SELECT count(*) FROM chunks WHERE document_version_id = ? AND chunking_id = ?", versionId, chunkingId);
+        int total = count(ws, "SELECT count(*) FROM chunks WHERE document_version_id = ? AND chunking_id = ? AND role <> 'PARENT'", versionId, chunkingId);
         List<Pending> pending = tx.workspace(ws, null, j -> j.query(
-                "SELECT c.id, c.text FROM chunks c WHERE c.document_version_id = ? AND c.chunking_id = ? "
+                "SELECT c.id, c.text FROM chunks c WHERE c.document_version_id = ? AND c.chunking_id = ? AND c.role <> 'PARENT' "
                         + "AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.chunk_id = c.id AND e.model = ?) ORDER BY c.ordinal",
                 (rs, n) -> new Pending(rs.getObject("id", UUID.class), Hashing.sha256Hex(rs.getString("text")), rs.getString("text")),
                 versionId, chunkingId, model));

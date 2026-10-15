@@ -24,6 +24,10 @@ public record RetrievalParams(Mode mode, String model, int kVec, int kKw, int rr
         return new RetrievalParams(m, model, kVec, kKw, rrfK, wVec, wKw, kFused, efSearch, keywordMatch);
     }
 
+    public RetrievalParams withModel(String m) {
+        return new RetrievalParams(mode, m, kVec, kKw, rrfK, wVec, wKw, kFused, efSearch, keywordMatch);
+    }
+
     public RetrievalParams withKeywordMatch(KeywordMatch k) {
         return new RetrievalParams(mode, model, kVec, kKw, rrfK, wVec, wKw, kFused, efSearch, k);
     }

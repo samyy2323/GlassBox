@@ -41,7 +41,7 @@ public final class HybridSql {
                   SELECT id, score, row_number() OVER (ORDER BY score DESC) AS rnk FROM (
                     SELECT c.id, ts_rank_cd(c.tsv, q) AS score
                     FROM chunks c, websearch_to_tsquery('english', :qtext) q
-                    WHERE c.chunking_id = :chunking AND NOT c.superseded AND c.tsv @@ q
+                    WHERE c.chunking_id = :chunking AND NOT c.superseded AND c.role <> 'PARENT' AND c.tsv @@ q
                     ORDER BY score DESC LIMIT :k_kw) s
                 ), fused AS (
                   SELECT COALESCE(vec.id, kw.id) AS id,

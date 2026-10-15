@@ -135,6 +135,38 @@ class ChunkerPropertyTest {
         });
     }
 
+    // ------------------------------------------------------------ parent_child
+
+    @Property(tries = 150)
+    void parentChildChunksNestAndChildrenCoverEveryParent(@ForAll("docs") ParsedDocument doc,
+                                                          @ForAll @IntRange(min = 12, max = 80) int parent,
+                                                          @ForAll @IntRange(min = 3, max = 11) int child) {
+        List<ChunkOut> chunks = new ParentChildChunker(parent, child).chunk(doc);
+        TokenIndex tokens = new TokenIndex(doc.text());
+        for (int i = 0; i < chunks.size(); i++) {
+            ChunkOut c = chunks.get(i);
+            assertThat(c.ordinal()).isEqualTo(i);
+            if (c.role() == Chunker.Role.PARENT) {
+                assertThat(c.parentOrdinal()).isNull();
+                assertThat(c.tokenCount()).isLessThanOrEqualTo(parent);
+            } else {
+                assertThat(c.role()).isEqualTo(Chunker.Role.CHILD);
+                assertThat(c.parentOrdinal()).isNotNull().isLessThan(i);
+                ChunkOut p = chunks.get(c.parentOrdinal());
+                assertThat(p.role()).isEqualTo(Chunker.Role.PARENT);
+                assertThat(c.start()).isGreaterThanOrEqualTo(p.start());
+                assertThat(c.end()).isLessThanOrEqualTo(p.end());
+                assertThat(c.tokenCount()).isLessThanOrEqualTo(child);
+            }
+        }
+        // Every token of the document is in some child, so nothing is unsearchable.
+        List<ChunkOut> children = chunks.stream().filter(c -> c.role() == Chunker.Role.CHILD).toList();
+        for (int t = 0; t < tokens.size(); t++) {
+            int ts = tokens.start(t), te = tokens.end(t);
+            assertThat(children).as("token %d is covered by a child", t).anyMatch(c -> c.start() <= ts && te <= c.end());
+        }
+    }
+
     // ------------------------------------------------------------ examples
 
     @Example
@@ -162,5 +194,6 @@ class ChunkerPropertyTest {
         assertThat(Chunker.create("fixed", java.util.Map.of("size", 256, "overlap", 25))).isInstanceOf(FixedChunker.class);
         assertThat(Chunker.create("recursive", java.util.Map.of("maxSize", 512, "prependHeadingPath", false))).isInstanceOf(RecursiveChunker.class);
         assertThat(Chunker.create("structure", java.util.Map.of("maxSize", 512))).isInstanceOf(StructureChunker.class);
+        assertThat(Chunker.create("parent_child", java.util.Map.of("parentSize", 1024, "childSize", 256))).isInstanceOf(ParentChildChunker.class);
     }
 }

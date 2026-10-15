@@ -44,10 +44,15 @@ public class FakeEmbeddingProvider implements EmbeddingProvider {
     }
 
     public static float[] vector(String text, int dim) {
+        return vector(text, dim, "");
+    }
+
+    /** A different salt gives a different (but equally deterministic) embedding space, like a different model. */
+    public static float[] vector(String text, int dim, String salt) {
         float[] v = new float[dim];
         Matcher m = WORD.matcher(text.toLowerCase());
         while (m.find()) {
-            byte[] h = sha(m.group());
+            byte[] h = sha(salt + m.group());
             int idx = ((h[0] & 0xff) << 8 | (h[1] & 0xff)) % dim;
             v[idx] += 1f;
         }

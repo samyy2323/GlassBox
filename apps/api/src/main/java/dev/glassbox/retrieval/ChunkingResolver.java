@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Finds the chunking row that uploads create by default for a workspace. */
+/** Finds the chunking row a pipeline searches: the one that uploads create by default, or the one a config names. */
 @Component
 public class ChunkingResolver {
     private final Tx tx;
@@ -24,8 +24,20 @@ public class ChunkingResolver {
         this.chunkSize = chunkSize;
     }
 
+    public Chunker defaultChunker() {
+        return IngestDefaults.chunker(chunkSize);
+    }
+
     public Optional<UUID> defaultChunkingId(UUID workspaceId) {
-        Chunker chunker = IngestDefaults.chunker(chunkSize);
+        return idOf(workspaceId, defaultChunker());
+    }
+
+    /** {@code chunking == null} means the default. Empty when nothing was ever ingested with that chunking. */
+    public Optional<UUID> resolve(UUID workspaceId, Chunking chunking) {
+        return chunking == null ? defaultChunkingId(workspaceId) : idOf(workspaceId, chunking.chunker());
+    }
+
+    private Optional<UUID> idOf(UUID workspaceId, Chunker chunker) {
         try {
             String params = json.writeValueAsString(chunker.params());
             List<UUID> ids = tx.workspace(workspaceId, null, j -> j.queryForList(
