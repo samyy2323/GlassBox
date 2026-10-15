@@ -23,6 +23,7 @@ export default function AutotuneNew() {
   const [floor, setFloor] = useState('80')
   const [latencyCap, setLatencyCap] = useState('1500')
   const [fullStage, setFullStage] = useState(false)
+  const [transformers, setTransformers] = useState(false)
   const [fullQuestions, setFullQuestions] = useState('20')
   const [stage1, setStage1] = useState('18')
   const [stage2, setStage2] = useState('24')
@@ -38,6 +39,7 @@ export default function AutotuneNew() {
     qualityFloor: objective === 'CHEAPEST_ABOVE_FLOOR' ? (num(floor) ?? 80) / 100 : undefined,
     latencyCapMs: objective === 'FASTEST_WITHIN_CAP' ? num(latencyCap) : undefined,
     fullStage,
+    transformers: transformers || undefined,
     fullQuestions: fullStage ? num(fullQuestions) : undefined,
     stage1Candidates: num(stage1),
     stage2Candidates: num(stage2),
@@ -104,6 +106,14 @@ export default function AutotuneNew() {
               </label>
             )}
           </fieldset>
+
+          <label className="flex items-start gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
+            <input type="checkbox" className="mt-1 accent-[rgb(var(--accent-rgb))]" checked={transformers} onChange={(ev) => setTransformers(ev.target.checked)} />
+            <span>
+              <span className="block font-medium">Also try query transformers</span>
+              <span className="block text-xs text-muted">Multi-query, HyDE and decomposition rewrite each question with the model before the search. They add model calls to the retrieval stages, which count against the spend cap; answers to repeated questions come from a cache.</span>
+            </span>
+          </label>
 
           <label className="flex items-start gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
             <input type="checkbox" className="mt-1 accent-[rgb(var(--accent-rgb))]" checked={fullStage} onChange={(ev) => setFullStage(ev.target.checked)} />

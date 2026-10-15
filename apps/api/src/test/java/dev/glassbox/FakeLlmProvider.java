@@ -38,6 +38,21 @@ public class FakeLlmProvider implements LlmProvider {
     /** Chat answers: given the user prompt, a scripted answer, or null for the default (first line of the first context chunk). */
     public static volatile java.util.function.Function<String, String> ANSWER_SCRIPT;
 
+    /** Query transformer prompts ("You rewrite search queries"): a scripted reply, or null for a sensible default. Called with the request. */
+    public static volatile java.util.function.Function<Request, String> TRANSFORM_SCRIPT;
+    public static final AtomicInteger TRANSFORM_CALLS = new AtomicInteger();
+
+    private static String transformReply(Request request, String user) {
+        var script = TRANSFORM_SCRIPT;
+        String scripted = script == null ? null : script.apply(request);
+        if (scripted != null) return scripted;
+        String system = request.messages().get(0).content();
+        if (system.contains("paraphrases")) return "1. Tell me about " + user + "\n2. " + user + " please explain\n- Details on " + user;
+        if (system.contains("hypothetical") || system.contains("short passage")) return "According to the site handbook, " + user.replace("?", "") + ". The details are recorded in the maintenance log by the duty technician.";
+        int and = user.toLowerCase().indexOf(" and ");
+        return and < 0 ? user : user.substring(0, and).strip() + "?\n" + user.substring(and + 5).strip();
+    }
+
     private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+");
 
     private static java.util.Set<String> words(String text) {
@@ -95,6 +110,11 @@ public class FakeLlmProvider implements LlmProvider {
         LAST_SYSTEM_PROMPT = request.messages().get(0).content();
         String user = request.messages().get(1).content();
         LAST_USER_PROMPT = user;
+        if (LAST_SYSTEM_PROMPT.startsWith("You rewrite search queries")) {
+            TRANSFORM_CALLS.incrementAndGet();
+            emit(transformReply(request, user), onToken);
+            return;
+        }
         String judged = judgeReply(request, user);
         if (judged != null) {
             JUDGE_CALLS.incrementAndGet();
@@ -188,6 +208,8 @@ public class FakeLlmProvider implements LlmProvider {
         GENERATOR_CALLS.set(0);
         JUDGE_CALLS.set(0);
         JUDGE_SCRIPT = null;
+        TRANSFORM_SCRIPT = null;
+        TRANSFORM_CALLS.set(0);
         ANSWER_SCRIPT = null;
         GENERATOR_SCRIPT = null;
         FAIL_NEXT.set(0);

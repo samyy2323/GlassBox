@@ -255,7 +255,9 @@ export interface ConfigInput {
   tokenBudget?: number
   chunking?: Chunking
   embeddingModel?: string
+  transformer?: Transformer
 }
+export type Transformer = 'NONE' | 'MULTI_QUERY' | 'HYDE' | 'DECOMPOSE'
 export interface Chunking {
   strategy: 'fixed' | 'recursive' | 'structure' | 'parent_child'
   size: number
@@ -267,6 +269,7 @@ export interface PipelineConfig {
   topN: number
   tokenBudget: number
   chunking?: Chunking
+  transformer?: Transformer
 }
 export interface MetricValue {
   metric: string
@@ -423,6 +426,7 @@ export interface AutotuneRequest {
   capMinutes?: number
   capLlmCalls?: number
   capSearches?: number
+  transformers?: boolean
 }
 export interface AutotuneEstimate {
   tuningQuestions: number

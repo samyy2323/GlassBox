@@ -7,6 +7,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { answerSentences, type Highlight } from '../lib/highlight'
 
 const STAGE_LABEL: Record<string, string> = {
+  query_transform: 'Rewrite query',
   query_embedding: 'Embed query',
   retrieval: 'Hybrid search',
   rerank: 'Rerank',

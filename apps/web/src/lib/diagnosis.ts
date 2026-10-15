@@ -74,6 +74,7 @@ export function configToInput(config: PipelineConfig, name: string): ConfigInput
     tokenBudget: config.tokenBudget,
     chunking: config.chunking,
     embeddingModel: config.retrieval.model,
+    transformer: config.transformer,
   }
 }
 

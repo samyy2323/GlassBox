@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, FlaskConical, Loader2, Plus, X } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { api, ApiError, type Chunking, type ConfigInput, type ExperimentMode } from '../lib/api'
+import { api, ApiError, type Chunking, type ConfigInput, type ExperimentMode, type Transformer } from '../lib/api'
 import { PRESETS, uniquePreset } from '../lib/experiments'
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
@@ -60,6 +60,11 @@ function ConfigCard({ config, index, onChange, onRemove, removable }: { config: 
             )}
           </>
         )}
+        <label className="space-y-1 text-xs text-muted" title="Rewrites the question with the model before searching. Costs one model call per question.">Query transformer
+          <select className={field} value={config.transformer ?? 'NONE'} onChange={(e) => onChange({ ...config, transformer: e.target.value === 'NONE' ? undefined : (e.target.value as Transformer) })}>
+            <option value="NONE">None</option><option value="MULTI_QUERY">Multi-query</option><option value="HYDE">HyDE</option><option value="DECOMPOSE">Decompose</option>
+          </select>
+        </label>
         <label className="space-y-1 text-xs text-muted">Embedding model
           <select className={field} value={config.embeddingModel ?? ''} onChange={(e) => onChange({ ...config, embeddingModel: e.target.value === '' ? undefined : e.target.value })}>
             <option value="">Default (bge-small)</option><option value="bge-small-en-v1.5">bge-small</option><option value="bge-base-en-v1.5">bge-base</option><option value="all-MiniLM-L6-v2">MiniLM</option>

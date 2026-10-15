@@ -20,6 +20,7 @@ import dev.glassbox.retrieval.Chunking;
 import dev.glassbox.retrieval.ChunkingResolver;
 import dev.glassbox.retrieval.HybridSql;
 import dev.glassbox.retrieval.PipelineConfig;
+import dev.glassbox.retrieval.transform.Transformer;
 import dev.glassbox.retrieval.RetrievalParams;
 import dev.glassbox.tenancy.Role;
 import dev.glassbox.tenancy.Tx;
@@ -111,8 +112,9 @@ public class ExperimentService {
         }
         // The chunking every upload gets is stored as "no chunking named", so its config (and hash) is the one P3 experiments already have.
         if (chunking != null && sameChunker(chunking.chunker(), chunkings.defaultChunker())) chunking = null;
+        Transformer transformer = parse(Transformer.class, in.transformer(), Transformer.NONE, "transformer");
         RetrievalParams params = new RetrievalParams(mode, model, pool, pool, rrfK, wVec, wKw, kFused, 100, keyword);
-        return new PipelineConfig(params, reranker, Math.max(50, topN), topN, budget, chunking);
+        return new PipelineConfig(params, reranker, Math.max(50, topN), topN, budget, chunking, transformer);
     }
 
     private static boolean sameChunker(Chunker a, Chunker b) {
@@ -182,8 +184,13 @@ public class ExperimentService {
     // ------------------------------------------------------------------ estimate and create
 
     private Map<String, Object> estimateFor(String mode, int questions, int runs) {
-        long llmCalls = mode.equals("FULL") ? (long) questions * runs * LLM_CALLS_PER_QUESTION : 0;
-        long tokens = mode.equals("FULL") ? (long) questions * runs * (ANSWER_TOKENS + (LLM_CALLS_PER_QUESTION - 1) * JUDGE_CALL_TOKENS) : 0;
+        return estimateFor(mode, questions, runs, 0, 0);
+    }
+
+    /** {@code transformCalls} and {@code transformTokens}: what the query transformers of all the configurations add to one question. */
+    private Map<String, Object> estimateFor(String mode, int questions, int runs, int transformCalls, int transformTokens) {
+        long llmCalls = (mode.equals("FULL") ? (long) questions * runs * LLM_CALLS_PER_QUESTION : 0) + (long) questions * transformCalls;
+        long tokens = (mode.equals("FULL") ? (long) questions * runs * (ANSWER_TOKENS + (LLM_CALLS_PER_QUESTION - 1) * JUDGE_CALL_TOKENS) : 0) + (long) questions * transformTokens;
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("questions", questions);
         m.put("retrievalCalls", questions * runs);
@@ -221,7 +228,10 @@ public class ExperimentService {
                 String line = indexes.describe(ws, need);
                 if (line != null) notes.add(line);
             }
-            Map<String, Object> e = estimateFor(mode, loaded.questions().size(), validated.size());
+            int tc = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().llmCalls()).sum();
+            int tt = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().tokens()).sum();
+            if (tc > 0) notes.add("Query transformers call the model once per question before the search (" + tc + " call(s) per question across the configurations); answers to a repeated question come from the cache.");
+            Map<String, Object> e = estimateFor(mode, loaded.questions().size(), validated.size(), tc, tt);
             return new Estimate(loaded.questions().size(), loaded.stale(), validated.size(), (Integer) e.get("retrievalCalls"), ((Number) e.get("llmCalls")).intValue(),
                     ((Number) e.get("tokens")).longValue(), (Double) e.get("usd"), notes);
         });

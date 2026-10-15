@@ -3,6 +3,9 @@ package dev.glassbox.retrieval;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.rerank.Reranker;
 import dev.glassbox.rerank.Rerankers;
+import dev.glassbox.retrieval.transform.QueryTransformer;
+import dev.glassbox.retrieval.transform.Transformer;
+import dev.glassbox.retrieval.transform.Transformers;
 import dev.glassbox.retrieval.ContextBuilder.Context;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,10 +33,12 @@ public class RetrievalPipeline {
     private final Rerankers rerankers;
     private final ContextBuilder contextBuilder;
     private final ParentExpander parents;
+    private final Transformers transformers;
 
     public RetrievalPipeline(ChunkingResolver chunkings, EmbeddingProviders embeddings, HybridRetriever retriever,
-                             Rerankers rerankers, ContextBuilder contextBuilder, ParentExpander parents) {
+                             Rerankers rerankers, ContextBuilder contextBuilder, ParentExpander parents, Transformers transformers) {
         this.parents = parents;
+        this.transformers = transformers;
         this.chunkings = chunkings;
         this.embeddings = embeddings;
         this.retriever = retriever;
@@ -62,17 +67,38 @@ public class RetrievalPipeline {
             return new Result(query, null, config, List.of(), List.of(), List.of(), empty, spans);
         }
 
+        // What is searched: the question itself, or what a query transformer made of it (SPEC 6).
+        List<QueryTransformer.Search> searches = List.of(QueryTransformer.Search.of(query));
+        if (config.transformer() != null) {
+            long tt = System.nanoTime();
+            QueryTransformer.Plan plan = transformers.plan(workspaceId, config.transformer(), query);
+            searches = plan.searches();
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("transformer", config.transformer());
+            d.put("queries", plan.searches().stream().map(QueryTransformer.Search::keyword).toList());
+            if (config.transformer() == Transformer.HYDE) d.put("hypotheticalAnswer", plan.searches().get(0).embed());
+            d.put("llmCalls", plan.llmCalls());
+            d.put("tokens", plan.tokens());
+            spans.add(span("query_transform", tt, d));
+        }
+
         // Keyword-only search needs no embedding; the SQL still wants a vector of the right size (its branch is LIMIT 0).
         long t = System.nanoTime();
-        float[] qvec = params.mode() == RetrievalParams.Mode.KEYWORD
-                ? new float[HybridSql.MODEL_DIMS.get(params.model())]
-                : embeddings.get(params.model()).embed(List.of(query)).get(0);
-        spans.add(span("query_embedding", t, Map.of("model", params.model(), "skipped", params.mode() == RetrievalParams.Mode.KEYWORD)));
+        boolean keywordOnly = params.mode() == RetrievalParams.Mode.KEYWORD;
+        List<float[]> qvecs = new ArrayList<>();
+        if (keywordOnly) {
+            for (int i = 0; i < searches.size(); i++) qvecs.add(new float[HybridSql.MODEL_DIMS.get(params.model())]);
+        } else {
+            qvecs.addAll(embeddings.get(params.model()).embed(searches.stream().map(QueryTransformer.Search::embed).toList()));
+        }
+        spans.add(span("query_embedding", t, Map.of("model", params.model(), "skipped", keywordOnly, "texts", searches.size())));
 
         t = System.nanoTime();
-        List<Candidate> candidates = retriever.search(workspaceId, chunkingId, query, qvec, params);
+        List<List<Candidate>> lists = new ArrayList<>();
+        for (int i = 0; i < searches.size(); i++) lists.add(retriever.search(workspaceId, chunkingId, searches.get(i).keyword(), qvecs.get(i), params));
+        List<Candidate> candidates = QueryFusion.fuse(lists, params.rrfK(), params.kFused());
         spans.add(span("retrieval", t, Map.of("mode", params.mode(), "candidates", candidates.size(), "kFused", params.kFused(),
-                "rrfK", params.rrfK(), "wVec", params.wVec(), "wKw", params.wKw())));
+                "rrfK", params.rrfK(), "wVec", params.wVec(), "wKw", params.wKw(), "searches", searches.size())));
 
         t = System.nanoTime();
         Reranker reranker = rerankers.get(config.reranker());

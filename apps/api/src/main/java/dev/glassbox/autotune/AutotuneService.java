@@ -68,7 +68,7 @@ public class AutotuneService {
         double floor = in(r.qualityFloor(), 0.8, 0.0, 1.0, "qualityFloor");
         return new Options(objective, floor, in(r.latencyCapMs(), 1500, 1, 600_000, "latencyCapMs"), Boolean.TRUE.equals(r.fullStage()),
                 in(r.stage1Candidates(), 18, 1, 60, "stage1Candidates"), in(r.stage2Candidates(), 24, 1, 60, "stage2Candidates"), in(r.finalists(), 5, 1, 8, "finalists"),
-                in(r.fullQuestions(), 20, 1, 200, "fullQuestions"), in(r.capMinutes(), 60, 1, 600, "capMinutes"), in(r.capLlmCalls(), 600, 1, 20_000, "capLlmCalls"), in(r.capSearches(), 20_000, 1, 1_000_000, "capSearches"),
+                in(r.fullQuestions(), 20, 1, 200, "fullQuestions"), in(r.capMinutes(), 60, 1, 600, "capMinutes"), in(r.capLlmCalls(), 600, 1, 20_000, "capLlmCalls"), in(r.capSearches(), 20_000, 1, 1_000_000, "capSearches"), Boolean.TRUE.equals(r.transformers()),
                 r.seed() != null ? r.seed() : defaultSeed);
     }
 
@@ -99,7 +99,7 @@ public class AutotuneService {
             Split s = split(j, r.testsetId(), o);
             List<SearchSpace.Candidate> s1 = SearchSpace.stage1(o.seed(), o.stage1Candidates(), models(), providers.defaultModel());
             long calls = retrievalCalls(s1.size(), s.tuningRetrieval()) + retrievalCalls(o.stage2Candidates(), s.tuningRetrieval()) + (long) (o.finalists() + 1) * s.heldOutRetrieval();
-            long llm = o.fullStage() ? (long) (o.finalists() + 1) * Math.min(o.fullQuestions(), s.tuning()) * 2 * 5 : 0;
+            long llm = (o.transformers() ? (long) s.tuningRetrieval() * o.stage2Candidates() / 2 : 0) + (o.fullStage() ? (long) (o.finalists() + 1) * Math.min(o.fullQuestions(), s.tuning()) * 2 * 5 : 0);
             List<String> notes = new ArrayList<>();
             notes.add("The test set is split " + s.tuning() + " to tune on and " + s.heldOut() + " held out. Choices are made on the tuning questions only; the headline numbers come from the held-out ones.");
             if (s.heldOut() < 30) {

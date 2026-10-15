@@ -4,6 +4,7 @@ import dev.glassbox.rerank.Reranker;
 import dev.glassbox.retrieval.Chunking;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalParams;
+import dev.glassbox.retrieval.transform.Transformer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -38,9 +39,14 @@ public final class SearchSpace {
     }
 
     static PipelineConfig config(Chunking chunking, String model, RetrievalParams.Mode mode, double wVec, double wKw, int kFused, Reranker.Type reranker, int topN, int budget) {
+        return config(chunking, model, mode, wVec, wKw, kFused, reranker, topN, budget, Transformer.NONE);
+    }
+
+    static PipelineConfig config(Chunking chunking, String model, RetrievalParams.Mode mode, double wVec, double wKw, int kFused, Reranker.Type reranker, int topN, int budget,
+                                 Transformer transformer) {
         int pool = Math.max(50, kFused);
         RetrievalParams params = new RetrievalParams(mode, model, pool, pool, 60, wVec, wKw, kFused, 100, RetrievalParams.KeywordMatch.ANY);
-        return new PipelineConfig(params, reranker, pool, topN, budget, chunking);
+        return new PipelineConfig(params, reranker, pool, topN, budget, chunking, transformer);
     }
 
     static Map<String, String> settings(PipelineConfig c) {
@@ -56,6 +62,7 @@ public final class SearchSpace {
         s.put("reranker", c.reranker() == Reranker.Type.NONE ? "none" : "cross-encoder");
         s.put("top n", String.valueOf(c.topN()));
         s.put("context budget", String.valueOf(c.tokenBudget()));
+        s.put("query transform", c.transformer() == null ? "none" : c.transformer().name().toLowerCase().replace('_', '-'));
         return s;
     }
 
@@ -71,7 +78,8 @@ public final class SearchSpace {
 
     static String label(Map<String, String> s) {
         return s.get("chunking") + " " + s.get("chunk size") + (s.get("overlap").equals("0%") ? "" : " +" + s.get("overlap")) + " · " + s.get("embedding model") + " · "
-                + s.get("retriever") + " · top " + s.get("top n") + (s.get("reranker").equals("none") ? "" : " · rerank");
+                + s.get("retriever") + " · top " + s.get("top n") + (s.get("reranker").equals("none") ? "" : " · rerank")
+                + (s.get("query transform").equals("none") ? "" : " · " + s.get("query transform"));
     }
 
     /** Every chunking AutoTune knows how to build. */
@@ -100,19 +108,28 @@ public final class SearchSpace {
 
     /** Stage 2: retrieval settings around the winner of stage 1 (its chunking and model stay fixed). */
     public static List<Candidate> stage2(long seed, int max, PipelineConfig winner) {
+        return stage2(seed, max, winner, false);
+    }
+
+    /**
+     * @param withTransformers also vary the query transformer. Off by default: a transformer calls the model for every question, which a retrieval-only
+     *                         search otherwise never does, so the user turns it on knowingly (and the model calls count against the spend cap).
+     */
+    public static List<Candidate> stage2(long seed, int max, PipelineConfig winner, boolean withTransformers) {
         List<Candidate> grid = new ArrayList<>();
+        List<Transformer> transformers = withTransformers ? List.of(Transformer.values()) : List.of(Transformer.NONE);
         for (RetrievalParams.Mode mode : List.of(RetrievalParams.Mode.VECTOR, RetrievalParams.Mode.HYBRID)) {
             for (double[] w : mode == RetrievalParams.Mode.HYBRID ? WEIGHTS : List.<double[]>of(new double[] {1, 1})) {
                 for (int k : K_FUSED) for (Reranker.Type rr : List.of(Reranker.Type.NONE, Reranker.Type.CROSS_ENCODER)) {
-                    for (int n : TOP_N) for (int budget : BUDGETS) {
-                        grid.add(candidate(config(winner.chunking(), winner.retrieval().model(), mode, w[0], w[1], k, rr, n, budget)));
+                    for (int n : TOP_N) for (int budget : BUDGETS) for (Transformer tr : transformers) {
+                        grid.add(candidate(config(winner.chunking(), winner.retrieval().model(), mode, w[0], w[1], k, rr, n, budget, tr)));
                     }
                 }
             }
         }
         // the stage 1 winner itself, unchanged, is a candidate: stage 2 can only improve on it
         return sample(grid, candidate(config(winner.chunking(), winner.retrieval().model(), winner.retrieval().mode(), winner.retrieval().wVec(), winner.retrieval().wKw(),
-                winner.retrieval().kFused(), winner.reranker(), winner.topN(), winner.tokenBudget())), seed, max);
+                winner.retrieval().kFused(), winner.reranker(), winner.topN(), winner.tokenBudget(), winner.transformer())), seed, max);
     }
 
     /** A deterministic sample of at most {@code max} grid points that always contains {@code must}. */

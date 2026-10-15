@@ -115,6 +115,8 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO judge_calibrations (workspace_id, judge_model, rubric_version, metric, n, agreement, kappa) VALUES (?, ?, 'v1', 'correctness', 30, 0.9, 0.8)", ws, canary);
             exec(c, "INSERT INTO run_metrics (run_id, workspace_id, metric, n) VALUES (?, ?, ?, 1)", runA, ws, "m-" + canary);
             exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
+            // P5 tables
+            exec(c, "INSERT INTO llm_cache (workspace_id, key, response) VALUES (?, ?, ?)", ws, "k-" + canary, canary);
             // P4 tables
             exec(c, "INSERT INTO workspace_settings (workspace_id, default_pipeline) VALUES (?, ?::jsonb)", ws, "{\"c\":\"" + canary + "\"}");
             UUID tune = UUID.randomUUID();

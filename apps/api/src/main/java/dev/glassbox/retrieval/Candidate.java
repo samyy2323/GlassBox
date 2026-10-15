@@ -15,6 +15,10 @@ public record Candidate(UUID chunkId, UUID documentId, String text, int tokenCou
                 kwRank, kwScore, score);
     }
 
+    public Candidate withFusedScore(double score) {
+        return new Candidate(chunkId, documentId, text, tokenCount, charStart, charEnd, page, score, vecRank, vecDistance, kwRank, kwScore, rerankScore);
+    }
+
     /** Overlap of the two spans in characters; 0 when they are in different documents. */
     public int overlapWith(Candidate other) {
         if (!documentId.equals(other.documentId)) return 0;

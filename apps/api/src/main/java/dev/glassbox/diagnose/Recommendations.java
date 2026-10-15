@@ -5,6 +5,7 @@ import dev.glassbox.diagnose.FailureClassifier.Sub;
 import dev.glassbox.rerank.Reranker;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalParams;
+import dev.glassbox.retrieval.transform.Transformer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -80,9 +81,12 @@ public final class Recommendations {
                         Map.of("tokenBudget", budget), "Use a budget of " + budget + " tokens");
             }
             case PARTIAL_RETRIEVAL -> {
+                if (c.transformer() != Transformer.DECOMPOSE) {
+                    return new Recommendation(stage, null, n, pct, share + "partial retrievals: multi-part questions got only some of their evidence, so split the question into sub-questions and search for each.",
+                            Map.of("transformer", "DECOMPOSE"), "Decompose the question");
+                }
                 int topN = Math.min(10, c.topN() + 3);
-                return new Recommendation(stage, null, n, pct, share + "partial retrievals: multi-part questions got only some of their evidence. "
-                        + "Query decomposition is the real fix (planned); for now put more chunks into the prompt.", Map.of("topN", topN), "Use top " + topN);
+                return new Recommendation(stage, null, n, pct, share + "partial retrievals even with decomposition, so put more chunks into the prompt.", Map.of("topN", topN), "Use top " + topN);
             }
             case GENERATION_MISS -> {
                 int falseAbstain = bySub.getOrDefault(Sub.FALSE_ABSTENTION, 0), unfaithful = bySub.getOrDefault(Sub.UNFAITHFUL, 0);

@@ -154,6 +154,16 @@ class SearchLogicTest {
     }
 
     @Test
+    void stage2OnlyVariesTheQueryTransformerWhenAskedTo() {
+        PipelineConfig winner = SearchSpace.baseline("bge-small-en-v1.5");
+        assertThat(SearchSpace.stage2(3, 10_000, winner)).allSatisfy(c -> assertThat(c.settings().get("query transform")).isEqualTo("none"));
+        List<Candidate> with = SearchSpace.stage2(3, 10_000, winner, true);
+        assertThat(with).hasSize(4 * 144);
+        assertThat(with.stream().map(c -> c.settings().get("query transform")).distinct()).containsExactlyInAnyOrder("none", "multi-query", "hyde", "decompose");
+        assertThat(with.get(0).config()).as("the unchanged winner stays first").isEqualTo(winner);
+    }
+
+    @Test
     void stage2KeepsTheWinnersChunkingAndModelAndVariesTheRest() {
         PipelineConfig winner = SearchSpace.config(new dev.glassbox.retrieval.Chunking("structure", 512, 0), "bge-base-en-v1.5", RetrievalParams.Mode.VECTOR, 1, 1, 50,
                 Reranker.Type.NONE, 5, 3000);

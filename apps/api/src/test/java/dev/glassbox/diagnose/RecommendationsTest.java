@@ -89,6 +89,15 @@ class RecommendationsTest {
     }
 
     @Test
+    void partialRetrievalOffersDecompositionFirstAndMoreChunksOnceItIsOn() {
+        Recommendation first = Recommendations.build(counts(Stage.PARTIAL_RETRIEVAL, 3), Map.of(), BASE).get(0);
+        assertThat(first.change()).isEqualTo(Map.of("transformer", "DECOMPOSE"));
+        assertThat(first.text()).contains("split the question into sub-questions");
+        Recommendation again = Recommendations.build(counts(Stage.PARTIAL_RETRIEVAL, 3), Map.of(), BASE.withTransformer(dev.glassbox.retrieval.transform.Transformer.DECOMPOSE)).get(0);
+        assertThat(again.change()).isEqualTo(Map.of("topN", 8));
+    }
+
+    @Test
     void badTestQuestionsPointAtTheTestSetAndHallucinationsAtThePrompt() {
         Recommendation bad = Recommendations.build(counts(Stage.BAD_TEST_QUESTION, 3), Map.of(), BASE).get(0);
         assertThat(bad.text()).endsWith("so fix the test set, not the pipeline.");

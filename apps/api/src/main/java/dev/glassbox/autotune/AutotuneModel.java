@@ -13,11 +13,11 @@ public final class AutotuneModel {
     /** Everything but the test set and the name has a default. */
     public record Request(UUID testsetId, String name, String objective, Double qualityFloor, Integer latencyCapMs, Boolean fullStage,
                           Integer stage1Candidates, Integer stage2Candidates, Integer finalists, Integer fullQuestions,
-                          Integer capMinutes, Integer capLlmCalls, Integer capSearches, Long seed) {}
+                          Integer capMinutes, Integer capLlmCalls, Integer capSearches, Boolean transformers, Long seed) {}
 
     /** The request after defaults and range checks; this is what is stored and what the search reads. */
     public record Options(Objective objective, double qualityFloor, int latencyCapMs, boolean fullStage, int stage1Candidates, int stage2Candidates,
-                          int finalists, int fullQuestions, int capMinutes, int capLlmCalls, int capSearches, long seed) {}
+                          int finalists, int fullQuestions, int capMinutes, int capLlmCalls, int capSearches, boolean transformers, long seed) {}
 
     public record Estimate(int tuningQuestions, int heldOutQuestions, int stage1Candidates, int stage2Candidates, int finalists, long retrievalCalls,
                            long llmCalls, List<String> notes) {}

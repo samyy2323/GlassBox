@@ -231,7 +231,7 @@ public class AutotuneHandler implements JobHandler {
             if (capped) {
                 r2 = r1;
             } else {
-                s2 = loadCandidates("STAGE2", SearchSpace.stage2(o.seed() + 1, o.stage2Candidates(), winner1.def.config()));
+                s2 = loadCandidates("STAGE2", SearchSpace.stage2(o.seed() + 1, o.stage2Candidates(), winner1.def.config(), o.transformers()));
                 r2 = halve("STAGE2", s2, tuningOrdered);
             }
             List<Scored> finalists = r2.ranked().subList(0, Math.min(o.finalists(), r2.ranked().size()));
@@ -363,6 +363,7 @@ public class AutotuneHandler implements JobHandler {
                 double latency = r.spans().stream().mapToLong(Span::millis).sum();
                 c.scores.put(key, new double[] {recall, latency, r.context().tokensUsed()});
                 retrievalCalls++;
+                for (Span sp : r.spans()) if (sp.stage().equals("query_transform")) llmCalls += ((Number) sp.detail().getOrDefault("llmCalls", 0)).intValue();
                 changed = true;
             }
             if (changed) saveScores(c);
