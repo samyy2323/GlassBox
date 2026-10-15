@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, FlaskConical, Loader2, Plus, X } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError, type Chunking, type ConfigInput, type ExperimentMode, type Transformer } from '../lib/api'
+import { breakdownLines, formatTokens, formatUsd } from '../lib/budget'
 import { PRESETS, uniquePreset } from '../lib/experiments'
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
@@ -110,6 +111,7 @@ export default function ExperimentNew() {
   const [mode, setMode] = useState<ExperimentMode>(prefill.mode ?? 'RETRIEVAL')
   const [name, setName] = useState(prefill.name ?? 'Vector vs hybrid')
   const [limit, setLimit] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
   const [configs, setConfigs] = useState<ConfigInput[]>(prefill.configs ?? [uniquePreset('vector', []), uniquePreset('hybrid', ['Vector'])])
   const chosen = testsetId || finals[0]?.id || ''
   const questionLimit = limit.trim() === '' || Number(limit) < 1 ? undefined : Math.floor(Number(limit))
@@ -121,7 +123,7 @@ export default function ExperimentNew() {
     retry: false,
   })
   const create = useMutation({
-    mutationFn: () => api.createExperiment(chosen, name.trim(), mode, configs, questionLimit),
+    mutationFn: () => api.createExperiment(chosen, name.trim(), mode, configs, questionLimit, { confirm: confirmed || undefined }),
     onSuccess: (e) => navigate(`/experiments/${e.id}`),
   })
   const names = configs.map((c) => c.name.trim())
@@ -203,8 +205,16 @@ export default function ExperimentNew() {
                 <div><dt className="eyebrow">Questions</dt><dd className="mt-0.5 font-semibold">{e.questions}</dd></div>
                 <div><dt className="eyebrow">Runs</dt><dd className="mt-0.5 font-semibold">{e.runs}</dd></div>
                 <div><dt className="eyebrow">Model calls</dt><dd className="mt-0.5 font-semibold">{e.llmCalls}</dd></div>
-                <div><dt className="eyebrow">Cost</dt><dd className="mt-0.5 font-semibold">{e.estimatedUsd > 0 ? `$${e.estimatedUsd.toFixed(2)}` : e.llmCalls > 0 ? `about ${Math.round(e.estimatedTokens / 1000)}k tokens, $0 locally` : '$0'}</dd></div>
+                <div><dt className="eyebrow">Cost</dt><dd className="mt-0.5 font-semibold">{e.estimatedUsd > 0 ? formatUsd(e.estimatedUsd) : e.llmCalls > 0 ? `about ${formatTokens(e.estimatedTokens)} tokens, $0 locally` : '$0'}</dd></div>
               </dl>
+              {breakdownLines(e.breakdown).length > 0 && (
+                <ul className="grid gap-x-6 gap-y-0.5 text-xs text-muted sm:grid-cols-2" aria-label="Cost breakdown">
+                  {breakdownLines(e.breakdown).map((l) => <li key={l.key} className="flex justify-between"><span>{l.label}</span><span className="tabular-nums">{formatTokens(l.tokens)} tokens{l.calls > 0 ? `, ${l.calls} calls` : ''}{l.usd > 0 ? `, ${formatUsd(l.usd)}` : ''}</span></li>)}
+                </ul>
+              )}
+              {e.needsConfirmation && (
+                <label className="flex items-center gap-2 text-sm font-medium text-warn"><input type="checkbox" checked={confirmed} onChange={(ev) => setConfirmed(ev.target.checked)} className="accent-[rgb(var(--accent-rgb))]" /> This is above your confirmation threshold. I have seen the estimate and want to run it.</label>
+              )}
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted">{e.notes.map((n) => <li key={n}>{n}</li>)}</ul>
             </>
           )}
@@ -213,7 +223,7 @@ export default function ExperimentNew() {
         {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         <div className="flex justify-end gap-2 pb-6">
           <Link to="/experiments" className="btn-ghost">Cancel</Link>
-          <button className="btn-primary" disabled={!valid || create.isPending || (e != null && e.questions === 0)} onClick={() => create.mutate()}>
+          <button className="btn-primary" disabled={!valid || create.isPending || (e != null && e.questions === 0) || (e?.needsConfirmation === true && !confirmed)} onClick={() => create.mutate()}>
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />} Run experiment
           </button>
         </div>

@@ -18,7 +18,7 @@ public class ExperimentController {
 
     public record EstimateRequest(UUID testsetId, String mode, List<ConfigInput> configs, Integer questionLimit) {}
 
-    public record CreateRequest(UUID testsetId, String name, String mode, List<ConfigInput> configs, Integer questionLimit) {}
+    public record CreateRequest(UUID testsetId, String name, String mode, List<ConfigInput> configs, Integer questionLimit, Double capUsd, Integer capCalls, Boolean confirm) {}
 
     private final ExperimentService experiments;
 
@@ -34,7 +34,8 @@ public class ExperimentController {
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ExperimentView create(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @RequestBody CreateRequest r) {
-        return experiments.create(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.name(), r.mode(), r.configs(), r.questionLimit());
+        return experiments.create(p, WorkspaceService.resolve(p, ws), r.testsetId(), r.name(), r.mode(), r.configs(), r.questionLimit(),
+                new ExperimentService.Limits(r.capUsd(), r.capCalls(), Boolean.TRUE.equals(r.confirm())));
     }
 
     @GetMapping

@@ -11,6 +11,9 @@ import dev.glassbox.common.ApiException;
 import dev.glassbox.chunking.Chunker;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.eval.ExperimentModel.*;
+import dev.glassbox.generate.CachedLlm;
+import dev.glassbox.cost.CostEstimator;
+import dev.glassbox.cost.BudgetService;
 import dev.glassbox.index.IndexService;
 import dev.glassbox.generate.LlmProvider;
 import dev.glassbox.generate.PromptBuilder;
@@ -65,12 +68,13 @@ public class ExperimentService {
     private final IndexService indexes;
     private final int seed;
     private final int maxTokens;
-    private final double promptUsdPerMillion;
+    private final BudgetService budgets;
+    private final CachedLlm cache;
 
     public ExperimentService(Tx tx, ObjectMapper json, JobQueue queue, LlmProvider llm, NliProvider nli, CalibrationService calibration,
                              ChunkingResolver chunkings, EmbeddingProviders providers, IndexService indexes,
                              @Value("${glassbox.embed.default-model}") String embeddingModel, @Value("${glassbox.eval.seed}") int seed,
-                             @Value("${glassbox.llm.max-tokens}") int maxTokens, @Value("${glassbox.cost.prompt-usd-per-million}") double promptUsdPerMillion) {
+                             @Value("${glassbox.llm.max-tokens}") int maxTokens, BudgetService budgets, CachedLlm cache) {
         this.tx = tx;
         this.json = json;
         this.queue = queue;
@@ -83,7 +87,8 @@ public class ExperimentService {
         this.indexes = indexes;
         this.seed = seed;
         this.maxTokens = maxTokens;
-        this.promptUsdPerMillion = promptUsdPerMillion;
+        this.budgets = budgets;
+        this.cache = cache;
     }
 
     // ------------------------------------------------------------------ configurations
@@ -115,6 +120,16 @@ public class ExperimentService {
         Transformer transformer = parse(Transformer.class, in.transformer(), Transformer.NONE, "transformer");
         RetrievalParams params = new RetrievalParams(mode, model, pool, pool, rrfK, wVec, wKw, kFused, 100, keyword);
         return new PipelineConfig(params, reranker, Math.max(50, topN), topN, budget, chunking, transformer);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Object o) {
+        return (Map<String, Object>) o;
+    }
+
+    /** What a caller may attach to a new experiment: its own cost cap in dollars and in model calls, and the confirmation of an estimate above the threshold. */
+    public record Limits(Double capUsd, Integer capCalls, boolean confirmed) {
+        public static final Limits NONE = new Limits(null, null, false);
     }
 
     private static boolean sameChunker(Chunker a, Chunker b) {
@@ -183,20 +198,25 @@ public class ExperimentService {
 
     // ------------------------------------------------------------------ estimate and create
 
-    private Map<String, Object> estimateFor(String mode, int questions, int runs) {
-        return estimateFor(mode, questions, runs, 0, 0);
-    }
-
     /** {@code transformCalls} and {@code transformTokens}: what the query transformers of all the configurations add to one question. */
-    private Map<String, Object> estimateFor(String mode, int questions, int runs, int transformCalls, int transformTokens) {
-        long llmCalls = (mode.equals("FULL") ? (long) questions * runs * LLM_CALLS_PER_QUESTION : 0) + (long) questions * transformCalls;
-        long tokens = (mode.equals("FULL") ? (long) questions * runs * (ANSWER_TOKENS + (LLM_CALLS_PER_QUESTION - 1) * JUDGE_CALL_TOKENS) : 0) + (long) questions * transformTokens;
+    private Map<String, Object> estimateFor(JdbcTemplate j, String mode, int questions, int runs, int transformCalls, int transformTokens) {
+        boolean full = mode.equals("FULL");
+        long qr = (long) questions * runs;
+        int judgeCalls = LLM_CALLS_PER_QUESTION - 1;
+        CostEstimator.Usage usage = new CostEstimator.Usage(
+                qr * 24,                                                                    // each question is embedded once per run
+                full ? qr * ANSWER_TOKENS : 0, full ? qr * 160 : 0, full ? (int) qr : 0,    // the answer
+                full ? qr * judgeCalls * JUDGE_CALL_TOKENS : 0, full ? qr * judgeCalls * 30 : 0, full ? (int) (qr * judgeCalls) : 0,   // claim checks and grades
+                Math.round((long) questions * transformTokens * 0.8), Math.round((long) questions * transformTokens * 0.2), questions * transformCalls,   // query rewriting
+                0, 0, 0);                                                                   // question synthesis happens when a test set is written, not here
+        CostEstimator.Breakdown bd = CostEstimator.price(usage, budgets.price(j, llm.model()), 0, cache.hitRate());
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("questions", questions);
         m.put("retrievalCalls", questions * runs);
-        m.put("llmCalls", llmCalls);
-        m.put("tokens", tokens);
-        m.put("usd", tokens * promptUsdPerMillion / 1_000_000.0);
+        m.put("llmCalls", (long) bd.calls());
+        m.put("tokens", bd.tokens() - bd.embeddings().tokens());   // model tokens: embeddings are not billed by the model and are shown in the breakdown
+        m.put("usd", bd.usd());
+        m.put("breakdown", bd.asMap());
         return m;
     }
 
@@ -231,13 +251,15 @@ public class ExperimentService {
             int tc = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().llmCalls()).sum();
             int tt = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().tokens()).sum();
             if (tc > 0) notes.add("Query transformers call the model once per question before the search (" + tc + " call(s) per question across the configurations); answers to a repeated question come from the cache.");
-            Map<String, Object> e = estimateFor(mode, loaded.questions().size(), validated.size(), tc, tt);
+            Map<String, Object> e = estimateFor(j, mode, loaded.questions().size(), validated.size(), tc, tt);
+            boolean needsConfirmation = budgets.needsConfirmation(j, (Double) e.get("usd"));
             return new Estimate(loaded.questions().size(), loaded.stale(), validated.size(), (Integer) e.get("retrievalCalls"), ((Number) e.get("llmCalls")).intValue(),
-                    ((Number) e.get("tokens")).longValue(), (Double) e.get("usd"), notes);
+                    ((Number) e.get("tokens")).longValue(), (Double) e.get("usd"), notes, castMap(e.get("breakdown")), needsConfirmation);
         });
     }
 
-    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs, Integer questionLimit) {
+    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs, Integer questionLimit, Limits limits) {
+        if (limits.capUsd() != null && limits.capUsd() < 0 || limits.capCalls() != null && limits.capCalls() < 1) throw ApiException.badRequest("A cap must be positive");
         String mode = parseMode(modeText);
         checkLimit(questionLimit);
         String cleanName = name == null ? "" : name.strip();
@@ -249,9 +271,16 @@ public class ExperimentService {
             MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"), questionLimit);
             if (loaded.questions().isEmpty()) throw ApiException.conflict("This test set has no accepted question with intact evidence to measure");
 
-            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by, question_limit) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING id", UUID.class,
-                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimateFor(mode, loaded.questions().size(), validated.size())), p.userId(), questionLimit);
+            int tc = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().llmCalls()).sum();
+            int tt = validated.stream().mapToInt(c -> c.transformer() == null ? 0 : c.transformer().tokens()).sum();
+            Map<String, Object> estimate = estimateFor(j, mode, loaded.questions().size(), validated.size(), tc, tt);
+            BudgetService.Verdict verdict = budgets.check(j, (Double) estimate.get("usd"), limits.capUsd(), limits.confirmed());
+            if (limits.capCalls() != null && ((Number) estimate.get("llmCalls")).longValue() > limits.capCalls()) {
+                throw ApiException.conflict("This run is estimated at " + estimate.get("llmCalls") + " model calls, over its cap of " + limits.capCalls() + ".");
+            }
+            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by, question_limit, cost_cap_usd, cost_cap_calls) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?) RETURNING id", UUID.class,
+                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimate), p.userId(), questionLimit, verdict.effectiveCapUsd(), limits.capCalls());
             String meta = write(runMeta(mode));
             for (int i = 0; i < validated.size(); i++) {
                 UUID configId = j.queryForObject("INSERT INTO pipeline_configs (workspace_id, config, config_hash) VALUES (?, ?::jsonb, ?) "

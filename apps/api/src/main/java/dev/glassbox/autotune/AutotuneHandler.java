@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.autotune.AutotuneModel.Options;
 import dev.glassbox.autotune.SearchSpace.Candidate;
+import dev.glassbox.cost.BudgetService;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.eval.ExperimentService;
 import dev.glassbox.eval.MeasurableQuestions;
@@ -67,9 +68,11 @@ public class AutotuneHandler implements JobHandler {
     private final ExperimentService experiments;
     private final EmbeddingProviders providers;
     private final AutotuneService service;
+    private final BudgetService budgets;
 
     public AutotuneHandler(Tx tx, ObjectMapper json, JobQueue queue, RetrievalPipeline pipeline, IndexService indexes, QuestionEvaluator evaluator,
-                           ExperimentService experiments, EmbeddingProviders providers, AutotuneService service) {
+                           ExperimentService experiments, EmbeddingProviders providers, AutotuneService service, BudgetService budgets) {
+        this.budgets = budgets;
         this.tx = tx;
         this.json = json;
         this.queue = queue;
@@ -620,6 +623,19 @@ public class AutotuneHandler implements JobHandler {
             return m;
         }
 
+        /** Estimate against actual for the budget page: what was projected when the search started, and the model calls and tokens it really used. */
+        void recordSpend() {
+            try {
+                String split = tx.workspace(ws, null, j -> j.queryForObject("SELECT split::text FROM autotunes WHERE id = ?", String.class, id));
+                var est = json.readTree(split).path("estimate");
+                double usd = tx.workspace(ws, null, j -> j.queryForObject("SELECT coalesce(sum(r.cost_usd), 0) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = ?", Double.class, experimentId));
+                long tokens = tx.workspace(ws, null, j -> j.queryForObject("SELECT coalesce(sum(r.tokens_in + r.tokens_out), 0) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = ?", Long.class, experimentId));
+                budgets.record(ws, "AUTOTUNE", id, est.path("usd").asDouble(0), usd, est.path("tokens").asLong(0), tokens, est.path("llmCalls").asInt(0), llmCalls, capped);
+            } catch (Exception e) {
+                log.warn("could not record the spend of autotune {}: {}", id, e.toString());
+            }
+        }
+
         void finishRun(Map<String, Object> result) {
             String text = write(result);
             String stopped = capped ? "SPEND_CAP" : null;
@@ -630,6 +646,7 @@ public class AutotuneHandler implements JobHandler {
                 return null;
             });
             checkpoint(null);
+            recordSpend();
             log.info("autotune {} done: {} retrieval calls, {} model calls, {} ms{}", id, retrievalCalls, llmCalls, elapsedMs(), capped ? " (spend cap reached)" : "");
         }
     }

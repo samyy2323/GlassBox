@@ -12,6 +12,7 @@ import ExperimentDetail from './pages/ExperimentDetail'
 import ExperimentNew from './pages/ExperimentNew'
 import Experiments from './pages/Experiments'
 import AutotuneDetail from './pages/AutotuneDetail'
+import Budget from './pages/Budget'
 import AutotuneNew from './pages/AutotuneNew'
 import Autotunes from './pages/Autotunes'
 import Login from './pages/Login'
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="/testsets" element={<TestSets />} />
               <Route path="/testsets/:id/review" element={<TestSetReview />} />
               <Route path="/experiments" element={<Experiments />} />
+              <Route path="/budget" element={<Budget />} />
               <Route path="/autotune" element={<Autotunes />} />
               <Route path="/autotune/new" element={<AutotuneNew />} />
               <Route path="/autotune/:id" element={<AutotuneDetail />} />

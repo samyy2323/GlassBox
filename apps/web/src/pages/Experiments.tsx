@@ -6,8 +6,8 @@ import { findMetric, formatMetric, HEADLINE, isActive, metricLabel, runProgress 
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
 
-const DOT: Record<ExperimentStatus, string> = { QUEUED: 'bg-muted', RUNNING: 'bg-accent animate-pulse', DONE: 'bg-ok', FAILED: 'bg-red-500', CANCELLED: 'bg-muted' }
-const LABEL: Record<ExperimentStatus, string> = { QUEUED: 'Queued', RUNNING: 'Running', DONE: 'Done', FAILED: 'Failed', CANCELLED: 'Cancelled' }
+const DOT: Record<ExperimentStatus, string> = { QUEUED: 'bg-muted', RUNNING: 'bg-accent animate-pulse', DONE: 'bg-ok', FAILED: 'bg-red-500', CANCELLED: 'bg-muted', ABORTED: 'bg-warn' }
+const LABEL: Record<ExperimentStatus, string> = { QUEUED: 'Queued', RUNNING: 'Running', DONE: 'Done', FAILED: 'Failed', CANCELLED: 'Cancelled', ABORTED: 'Stopped by budget' }
 
 export function ExperimentStatusChip({ status }: { status: ExperimentStatus }) {
   return (

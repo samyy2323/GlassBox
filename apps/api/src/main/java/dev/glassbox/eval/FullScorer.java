@@ -1,6 +1,8 @@
 package dev.glassbox.eval;
 
 import dev.glassbox.chunking.TokenIndex;
+import dev.glassbox.cost.BudgetService;
+import dev.glassbox.cost.CostEstimator;
 import dev.glassbox.eval.ClaimSplitter.Claim;
 import dev.glassbox.eval.ClaimVerifier.Checked;
 import dev.glassbox.generate.AnswerSanitizer;
@@ -51,14 +53,12 @@ public class FullScorer {
     private final Tx tx;
     private final int maxTokens;
     private final int seed;
-    private final double promptUsdPerMillion;
-    private final double completionUsdPerMillion;
+    private final BudgetService budgets;
 
     public FullScorer(LlmProvider llm, PromptBuilder prompts, AnswerSanitizer sanitizer, CitationParser citations, ClaimSplitter splitter,
                       ClaimVerifier verifier, Judge judge, TraceAssembler assembler, TraceService traces, Tx tx,
                       @Value("${glassbox.llm.max-tokens}") int maxTokens, @Value("${glassbox.eval.seed}") int seed,
-                      @Value("${glassbox.cost.prompt-usd-per-million}") double promptUsdPerMillion,
-                      @Value("${glassbox.cost.completion-usd-per-million}") double completionUsdPerMillion) {
+                      BudgetService budgets) {
         this.llm = llm;
         this.prompts = prompts;
         this.sanitizer = sanitizer;
@@ -71,8 +71,7 @@ public class FullScorer {
         this.tx = tx;
         this.maxTokens = maxTokens;
         this.seed = seed;
-        this.promptUsdPerMillion = promptUsdPerMillion;
-        this.completionUsdPerMillion = completionUsdPerMillion;
+        this.budgets = budgets;
     }
 
     public Scored score(UUID ws, MeasurableQuestions.Question q, RetrievalPipeline.Result result, Runnable alive) {
@@ -159,7 +158,8 @@ public class FullScorer {
         detail.put("judge", judged);
 
         UUID traceId = saveTrace(ws, q.text(), answer, abstained, started, spans, result, titles, messages, parsed, promptTokens);
-        double cost = (tokensIn * promptUsdPerMillion + tokensOut * completionUsdPerMillion) / 1_000_000.0;
+        CostEstimator.Price price = budgets.price(ws, llm.model());
+        double cost = (tokensIn * price.promptUsdPerMillion() + tokensOut * price.completionUsdPerMillion()) / 1_000_000.0;
         return new Scored(m, answer, detail, tokensIn, tokensOut, cost, traceId, abstained);
     }
 

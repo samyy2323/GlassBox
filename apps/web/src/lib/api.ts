@@ -237,7 +237,7 @@ export interface TestSetDiff {
   unchanged: number
 }
 
-export type ExperimentStatus = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED'
+export type ExperimentStatus = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED' | 'ABORTED'
 export type ExperimentMode = 'RETRIEVAL' | 'FULL'
 export type Outcome = 'B_BETTER' | 'A_BETTER' | 'NO_DIFFERENCE'
 export type JudgeStatus = 'calibrated' | 'uncalibrated' | 'unknown'
@@ -352,6 +352,8 @@ export interface Estimate {
   estimatedTokens: number
   estimatedUsd: number
   notes: string[]
+  breakdown?: Record<string, unknown>
+  needsConfirmation?: boolean
 }
 export interface ExperimentResult {
   questionId: string
@@ -427,6 +429,7 @@ export interface AutotuneRequest {
   capLlmCalls?: number
   capSearches?: number
   transformers?: boolean
+  confirm?: boolean
 }
 export interface AutotuneEstimate {
   tuningQuestions: number
@@ -437,6 +440,8 @@ export interface AutotuneEstimate {
   retrievalCalls: number
   llmCalls: number
   notes: string[]
+  estimatedUsd?: number
+  needsConfirmation?: boolean
 }
 export interface AutotuneHeldOut {
   quality: number
@@ -533,6 +538,31 @@ export interface AutotuneSummary {
   createdAt: string
   finishedAt?: string
   headline?: string
+}
+export interface ModelPrice {
+  model: string
+  promptUsdPerMillion: number
+  completionUsdPerMillion: number
+}
+export interface BudgetLimits {
+  monthlyUsd: number | null
+  perRunUsd: number | null
+  confirmAboveUsd: number | null
+}
+export interface BudgetOverview {
+  budget: BudgetLimits
+  spentThisMonthUsd: number
+  tokensThisMonth: number
+  prices: ModelPrice[]
+  defaults: ModelPrice
+  recent: { kind: string; refId: string; estimatedUsd: number; actualUsd: number; estimatedTokens: number; actualTokens: number; estimatedCalls: number; actualCalls: number; aborted: boolean; createdAt: string }[]
+  tokenError: number | null
+  measuredRuns: number
+}
+export interface RunLimits {
+  capUsd?: number
+  capCalls?: number
+  confirm?: boolean
 }
 export type JudgedMetric = 'faithfulness' | 'correctness' | 'relevance'
 export interface CalibrationItem {
@@ -671,8 +701,12 @@ export const api = {
   experiment: (id: string) => request<Experiment>(`/api/experiments/${id}`),
   estimateExperiment: (testsetId: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number) =>
     request<Estimate>('/api/experiments/estimate', { method: 'POST', body: JSON.stringify({ testsetId, mode, configs, questionLimit }) }),
-  createExperiment: (testsetId: string, name: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number) =>
-    request<Experiment>('/api/experiments', { method: 'POST', body: JSON.stringify({ testsetId, name, mode, configs, questionLimit }) }),
+  createExperiment: (testsetId: string, name: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number, limits: RunLimits = {}) =>
+    request<Experiment>('/api/experiments', { method: 'POST', body: JSON.stringify({ testsetId, name, mode, configs, questionLimit, ...limits }) }),
+  budget: () => request<BudgetOverview>('/api/budget'),
+  setBudget: (b: BudgetLimits) => request<BudgetLimits>('/api/budget', { method: 'PUT', body: JSON.stringify(b) }),
+  setPrice: (p: ModelPrice) => request<ModelPrice[]>('/api/budget/prices', { method: 'PUT', body: JSON.stringify(p) }),
+  deletePrice: (model: string) => request<ModelPrice[]>(`/api/budget/prices?model=${encodeURIComponent(model)}`, { method: 'DELETE' }),
   cancelExperiment: (id: string) => request<void>(`/api/experiments/${id}/cancel`, { method: 'POST' }),
   experimentResults: (id: string, run: string) => request<ExperimentResult[]>(`/api/experiments/${id}/results?run=${run}`),
   compareRuns: (a: string, b: string) => request<RunDiff>(`/api/experiments/compare?a=${a}&b=${b}`),

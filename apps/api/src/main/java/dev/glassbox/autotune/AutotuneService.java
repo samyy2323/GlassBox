@@ -8,6 +8,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.auth.Principal;
 import dev.glassbox.autotune.AutotuneModel.*;
+import dev.glassbox.cost.BudgetService;
+import dev.glassbox.cost.CostEstimator;
+import dev.glassbox.generate.LlmProvider;
 import dev.glassbox.common.ApiException;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.eval.MeasurableQuestions;
@@ -44,9 +47,13 @@ public class AutotuneService {
     private final EmbeddingProviders providers;
     private final WorkspaceDefaults defaults;
     private final int defaultSeed;
+    private final BudgetService budgets;
+    private final LlmProvider llm;
 
     public AutotuneService(Tx tx, ObjectMapper json, JobQueue queue, IndexService indexes, EmbeddingProviders providers, WorkspaceDefaults defaults,
-                           @Value("${glassbox.eval.seed}") int defaultSeed) {
+                           BudgetService budgets, LlmProvider llm, @Value("${glassbox.eval.seed}") int defaultSeed) {
+        this.budgets = budgets;
+        this.llm = llm;
         this.tx = tx;
         this.json = json;
         this.queue = queue;
@@ -115,8 +122,14 @@ public class AutotuneService {
             notes.add(o.fullStage() ? "Stage 3 and the held-out check write and judge answers: about " + llm + " model calls. On a small local model that takes a long time."
                     : "Answers are not generated: quality is context recall, measured without any model call. Turn on the full stage to include correctness and faithfulness.");
             notes.add("The search stops after " + o.capMinutes() + " minutes, " + o.capSearches() + " searches or " + o.capLlmCalls() + " model calls, whichever comes first, and keeps the best result so far.");
-            return new Estimate(s.tuning(), s.heldOut(), s1.size(), o.stage2Candidates(), o.finalists(), calls, llm, notes);
+            double usd = usd(j, llm);
+            return new Estimate(s.tuning(), s.heldOut(), s1.size(), o.stage2Candidates(), o.finalists(), calls, llm, notes, usd, budgets.needsConfirmation(j, usd));
         });
+    }
+
+    /** Dollars for the model calls of a search, at the workspace's price for the model (about 600 prompt and 100 completion tokens a call). Zero for a local model. */
+    private double usd(JdbcTemplate j, long llmCalls) {
+        return CostEstimator.price(new CostEstimator.Usage(0, 0, 0, 0, llmCalls * 600, llmCalls * 100, (int) llmCalls, 0, 0, 0, 0, 0, 0), budgets.price(j, this.llm.model()), 0, 0).usd();
     }
 
     /** Question counts per part, for the estimate. */
@@ -160,8 +173,12 @@ public class AutotuneService {
                 throw ApiException.conflict("AutoTune needs answerable questions on both sides of the split: " + s.tuningRetrieval() + " to tune on and " + s.heldOutRetrieval()
                         + " held out. Add questions to the test set.");
             }
+            long estimatedCalls = (o.transformers() ? (long) s.tuningRetrieval() * o.stage2Candidates() / 2 : 0) + (o.fullStage() ? (long) (o.finalists() + 1) * Math.min(o.fullQuestions(), s.tuning()) * 2 * 5 : 0);
+            double estimatedUsd = usd(j, estimatedCalls);
+            budgets.check(j, estimatedUsd, null, Boolean.TRUE.equals(r.confirm()));
             String optionsJson = write(o);
-            String splitJson = write(Map.of("tuning", s.tuning(), "heldOut", s.heldOut(), "tuningAnswerable", s.tuningRetrieval(), "heldOutAnswerable", s.heldOutRetrieval(), "seed", o.seed()));
+            String splitJson = write(Map.of("tuning", s.tuning(), "heldOut", s.heldOut(), "tuningAnswerable", s.tuningRetrieval(), "heldOutAnswerable", s.heldOutRetrieval(), "seed", o.seed(),
+                    "estimate", Map.of("usd", estimatedUsd, "llmCalls", estimatedCalls, "tokens", estimatedCalls * 700)));
             UUID id = j.queryForObject("INSERT INTO autotunes (workspace_id, testset_id, name, objective, options, split, created_by) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?) RETURNING id",
                     UUID.class, ws, r.testsetId(), name, o.objective().name(), optionsJson, splitJson, p.userId());
             queue.enqueue(j, ws, AutotuneHandler.TYPE, json.createObjectNode().put("autotuneId", id.toString()), "autotune-" + id);

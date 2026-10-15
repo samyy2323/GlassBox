@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.glassbox.eval.ExperimentModel.RunComparison;
 import dev.glassbox.eval.ExperimentModel.RunView;
+import dev.glassbox.cost.BudgetService;
+import dev.glassbox.cost.CostEstimator;
 import dev.glassbox.index.IndexService;
 import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
@@ -39,10 +41,12 @@ public class RunExperimentHandler implements JobHandler {
     private final JobQueue queue;
     private final ExperimentService experiments;
     private final IndexService indexes;
+    private final BudgetService budgets;
 
     public RunExperimentHandler(Tx tx, ObjectMapper json, QuestionEvaluator evaluator, JobQueue queue, ExperimentService experiments,
-                                IndexService indexes) {
+                                IndexService indexes, BudgetService budgets) {
         this.indexes = indexes;
+        this.budgets = budgets;
         this.tx = tx;
         this.json = json;
         this.evaluator = evaluator;
@@ -55,7 +59,10 @@ public class RunExperimentHandler implements JobHandler {
         return TYPE;
     }
 
-    private record Target(UUID id, UUID testsetId, String status, String mode, Integer limit) {}
+    private record Target(UUID id, UUID testsetId, String status, String mode, Integer limit, Double capUsd, Integer capCalls) {}
+
+    /** Model calls per question in a full run (answer, claim checks, grades): what a call cap is counted in. */
+    private static final int LLM_CALLS_PER_QUESTION = 5;
 
     private record RunRow(UUID id, String label, String status, String config) {}
 
@@ -63,9 +70,10 @@ public class RunExperimentHandler implements JobHandler {
     public void handle(Job job) throws Exception {
         UUID ws = job.workspaceId();
         UUID experimentId = UUID.fromString(job.payload().get("experimentId").asText());
-        Target target = tx.workspace(ws, null, j -> j.query("SELECT id, testset_id, status, mode, question_limit FROM experiments WHERE id = ?",
+        Target target = tx.workspace(ws, null, j -> j.query("SELECT id, testset_id, status, mode, question_limit, cost_cap_usd, cost_cap_calls FROM experiments WHERE id = ?",
                 (rs, n) -> new Target(rs.getObject("id", UUID.class), rs.getObject("testset_id", UUID.class), rs.getString("status"), rs.getString("mode"),
-                        (Integer) rs.getObject("question_limit")), experimentId)
+                        (Integer) rs.getObject("question_limit"), rs.getObject("cost_cap_usd") == null ? null : rs.getDouble("cost_cap_usd"),
+                        (Integer) rs.getObject("cost_cap_calls")), experimentId)
                 .stream().findFirst().orElse(null));
         if (target == null || !(target.status().equals("QUEUED") || target.status().equals("RUNNING"))) return;
         tx.workspace(ws, null, j -> j.update("UPDATE experiments SET status = 'RUNNING' WHERE id = ? AND status = 'QUEUED'", experimentId));
@@ -92,6 +100,7 @@ public class RunExperimentHandler implements JobHandler {
             for (MeasurableQuestions.Question q : loaded.questions()) {
                 if (done.contains(q.id())) continue;
                 if (cancelled(ws, experimentId)) return;
+                if (full && abortedByCap(ws, experimentId, target)) return;
                 queue.heartbeat(job);
                 evaluator.evaluate(ws, run.id(), q, config, full, () -> queue.heartbeat(job));
             }
@@ -118,6 +127,44 @@ public class RunExperimentHandler implements JobHandler {
     }
 
     /** Stores the comparison of every run against the baseline and closes the experiment. */
+    /**
+     * The abort rule of SPEC 11: a run stops when its actual spend passes 120% of its cap (dollars or model calls). What was measured is kept. The check is made
+     * before each question, so a run overshoots its cap by at most one question, which is why the rule is 120% and not 100%.
+     */
+    private boolean abortedByCap(UUID ws, UUID experimentId, Target target) {
+        if (target.capUsd() == null && target.capCalls() == null) return false;
+        var totals = tx.workspace(ws, null, j -> j.queryForMap("SELECT coalesce(sum(r.cost_usd), 0) AS usd, count(*) AS n FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = ?", experimentId));
+        double usd = ((Number) totals.get("usd")).doubleValue();
+        long calls = ((Number) totals.get("n")).longValue() * LLM_CALLS_PER_QUESTION;
+        boolean overUsd = CostEstimator.overCap(usd, target.capUsd()), overCalls = CostEstimator.overCap(calls, target.capCalls() == null ? null : target.capCalls());
+        if (!overUsd && !overCalls) return false;
+        String why = overUsd ? String.format("spend of $%.2f passed 120%% of the $%.2f cap", usd, target.capUsd()) : calls + " model calls passed 120% of the cap of " + target.capCalls();
+        tx.workspace(ws, null, j -> {
+            j.update("UPDATE experiments SET status = 'ABORTED', error = ?, finished_at = now() WHERE id = ? AND status = 'RUNNING'", "Stopped by its budget: " + why + ". The questions measured so far are kept.", experimentId);
+            j.update("UPDATE runs SET status = 'CANCELLED' WHERE experiment_id = ? AND status IN ('PENDING', 'RUNNING')", experimentId);
+            return null;
+        });
+        recordSpend(ws, experimentId, true);
+        log.info("experiment {} aborted: {}", experimentId, why);
+        return true;
+    }
+
+    /** Estimate against actual, for the budget page and the estimator's own error. */
+    private void recordSpend(UUID ws, UUID experimentId, boolean aborted) {
+        var row = tx.workspace(ws, null, j -> j.queryForMap("SELECT e.estimated_cost::text AS estimated, "
+                + "(SELECT coalesce(sum(r.cost_usd), 0) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = e.id) AS usd, "
+                + "(SELECT coalesce(sum(r.tokens_in + r.tokens_out), 0) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = e.id) AS tokens, "
+                + "(SELECT count(*) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = e.id) AS results, e.mode FROM experiments e WHERE e.id = ?", experimentId));
+        try {
+            var est = json.readTree((String) row.get("estimated"));
+            long calls = "FULL".equals(row.get("mode")) ? ((Number) row.get("results")).longValue() * LLM_CALLS_PER_QUESTION : 0;
+            budgets.record(ws, "EXPERIMENT", experimentId, est.path("usd").asDouble(0), ((Number) row.get("usd")).doubleValue(), est.path("tokens").asLong(0),
+                    ((Number) row.get("tokens")).longValue(), est.path("llmCalls").asInt(0), (int) calls, aborted);
+        } catch (Exception e) {
+            log.warn("could not record the spend of experiment {}: {}", experimentId, e.toString());
+        }
+    }
+
     private void finish(UUID ws, UUID experimentId, MeasurableQuestions.Loaded loaded, int runCount) {
         tx.workspace(ws, null, j -> {
             var runRows = j.queryForList("SELECT id, label, ordinal, status, samples_done FROM runs WHERE experiment_id = ? ORDER BY ordinal", experimentId);
@@ -147,5 +194,6 @@ public class RunExperimentHandler implements JobHandler {
             }
             return null;
         });
+        recordSpend(ws, experimentId, false);
     }
 }

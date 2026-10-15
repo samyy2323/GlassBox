@@ -24,6 +24,7 @@ export default function AutotuneNew() {
   const [latencyCap, setLatencyCap] = useState('1500')
   const [fullStage, setFullStage] = useState(false)
   const [transformers, setTransformers] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
   const [fullQuestions, setFullQuestions] = useState('20')
   const [stage1, setStage1] = useState('18')
   const [stage2, setStage2] = useState('24')
@@ -40,6 +41,7 @@ export default function AutotuneNew() {
     latencyCapMs: objective === 'FASTEST_WITHIN_CAP' ? num(latencyCap) : undefined,
     fullStage,
     transformers: transformers || undefined,
+    confirm: confirmed || undefined,
     fullQuestions: fullStage ? num(fullQuestions) : undefined,
     stage1Candidates: num(stage1),
     stage2Candidates: num(stage2),
@@ -153,6 +155,9 @@ export default function AutotuneNew() {
                 <div><dt className="eyebrow">Searches</dt><dd className="mt-0.5 font-semibold">about {e.retrievalCalls}</dd></div>
                 <div><dt className="eyebrow">Model calls</dt><dd className="mt-0.5 font-semibold">{e.llmCalls}</dd></div>
               </dl>
+              {e.needsConfirmation && (
+                <label className="flex items-center gap-2 text-sm font-medium text-warn"><input type="checkbox" checked={confirmed} onChange={(ev) => setConfirmed(ev.target.checked)} className="accent-[rgb(var(--accent-rgb))]" /> This is above your confirmation threshold ({e.estimatedUsd != null ? `$${e.estimatedUsd.toFixed(2)}` : 'see the estimate'}). Run it anyway.</label>
+              )}
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted">{e.notes.map((n) => <li key={n}>{n}</li>)}</ul>
             </>
           )}
@@ -161,7 +166,7 @@ export default function AutotuneNew() {
         {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         <div className="flex justify-end gap-2 pb-6">
           <Link to="/autotune" className="btn-ghost">Cancel</Link>
-          <button className="btn-primary" disabled={!valid || create.isPending} onClick={() => create.mutate()}>
+          <button className="btn-primary" disabled={!valid || create.isPending || (e?.needsConfirmation === true && !confirmed)} onClick={() => create.mutate()}>
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Start the search
           </button>
         </div>

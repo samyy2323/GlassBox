@@ -15,7 +15,7 @@ public final class ExperimentModel {
     public record ConfigInput(String name, String mode, Integer kFused, Integer rrfK, Double wVec, Double wKw, String keywordMatch,
                               String reranker, Integer topN, Integer tokenBudget, Chunking chunking, String embeddingModel, String transformer) {}
 
-    public record Estimate(int questions, int staleQuestions, int runs, int retrievalCalls, int llmCalls, long estimatedTokens, double estimatedUsd, List<String> notes) {}
+    public record Estimate(int questions, int staleQuestions, int runs, int retrievalCalls, int llmCalls, long estimatedTokens, double estimatedUsd, List<String> notes, Map<String, Object> breakdown, boolean needsConfirmation) {}
 
     public record MetricView(String metric, String slice, String method, Double value, Double ciLow, Double ciHigh, int n) {}
 
