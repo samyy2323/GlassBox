@@ -79,6 +79,7 @@ export function Shell() {
       { id: 'library', label: 'Open the library', hint: 'Documents', icon: paletteIcons.library, run: () => navigate('/documents') },
       { id: 'testsets', label: 'Open test sets', hint: 'Questions to measure answers', icon: paletteIcons.testsets, run: () => navigate('/testsets') },
       { id: 'experiments', label: 'Open experiments', hint: 'Measure configurations', icon: paletteIcons.experiments, run: () => navigate('/experiments') },
+      { id: 'autotune', label: 'Open AutoTune', hint: 'Search for a better configuration', icon: paletteIcons.autotune, run: () => navigate('/autotune') },
       { id: 'calibration', label: 'Calibrate the judge', hint: 'Check its grades against yours', icon: paletteIcons.calibration, run: () => navigate('/calibration') },
       { id: 'xray', label: 'Open X-Ray', hint: 'How answers were made', icon: paletteIcons.xray, run: () => navigate('/xray') },
       { id: 'upload', label: 'Upload documents…', icon: paletteIcons.upload, run: () => picker.current?.click() },

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ChevronLeft, Loader2, ScanSearch, XCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { ForestPlot } from '../components/ForestPlot'
+import { Diagnosis } from '../components/Diagnosis'
 import { Heatmap } from '../components/Heatmap'
 import { JudgeBadge } from '../components/JudgeBadge'
 import { api, type ComparisonRow, type Experiment, type Flip, type RunSummary } from '../lib/api'
@@ -307,6 +308,10 @@ export default function ExperimentDetail() {
 
             <Section title="By question type" hint={`${metricLabel(headline)} for each kind of question. A configuration that scores well overall can still fail one kind. Hatched cells have fewer than 10 questions.`}>
               <Heatmap runs={e.runs as RunSummary[]} metric={headline} />
+            </Section>
+
+            <Section title="Why questions failed" hint="Each failed question is labelled with the first stage of the pipeline that lost it, with advice for the stages that explain the most failures.">
+              <Diagnosis e={e} canEdit={canEdit} />
             </Section>
 
             <Section title="Compare two runs" hint="The same table for any two runs, and the questions that changed sides.">

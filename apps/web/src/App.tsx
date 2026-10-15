@@ -11,6 +11,9 @@ import Documents from './pages/Documents'
 import ExperimentDetail from './pages/ExperimentDetail'
 import ExperimentNew from './pages/ExperimentNew'
 import Experiments from './pages/Experiments'
+import AutotuneDetail from './pages/AutotuneDetail'
+import AutotuneNew from './pages/AutotuneNew'
+import Autotunes from './pages/Autotunes'
 import Login from './pages/Login'
 import TestSetReview from './pages/TestSetReview'
 import TestSets from './pages/TestSets'
@@ -51,6 +54,9 @@ export default function App() {
               <Route path="/testsets" element={<TestSets />} />
               <Route path="/testsets/:id/review" element={<TestSetReview />} />
               <Route path="/experiments" element={<Experiments />} />
+              <Route path="/autotune" element={<Autotunes />} />
+              <Route path="/autotune/new" element={<AutotuneNew />} />
+              <Route path="/autotune/:id" element={<AutotuneDetail />} />
               <Route path="/experiments/new" element={<ExperimentNew />} />
               <Route path="/experiments/:id" element={<ExperimentDetail />} />
               <Route path="/calibration" element={<Calibration />} />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { CornerDownLeft, FlaskConical, Files, ListChecks, LogOut, MessageSquare, MessageSquarePlus, Moon, Scale, ScanSearch, Search, Sun, Upload } from 'lucide-react'
+import { CornerDownLeft, Files, FlaskConical, ListChecks, LogOut, MessageSquare, MessageSquarePlus, Moon, Scale, ScanSearch, Search, Sun, Upload, Wand2 } from 'lucide-react'
 
 export interface Command {
   id: string
@@ -98,6 +98,7 @@ export const paletteIcons = {
   xray: <ScanSearch className="h-4 w-4" />,
   testsets: <ListChecks className="h-4 w-4" />,
   experiments: <FlaskConical className="h-4 w-4" />,
+  autotune: <Wand2 className="h-4 w-4" />,
   calibration: <Scale className="h-4 w-4" />,
   upload: <Upload className="h-4 w-4" />,
   chat: <MessageSquare className="h-4 w-4" />,

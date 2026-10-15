@@ -19,6 +19,8 @@ export const METRICS: Record<string, { label: string; hint: string; group: 'Retr
   citation_precision: { label: 'Citation precision', hint: 'Of the statements that cite a chunk, the share whose chunk really says it.', group: 'Answer', kind: 'rate', higherIsBetter: true },
   false_abstention: { label: 'False abstention', hint: 'Answerable questions the system wrongly refused. Lower is better.', group: 'Abstention', kind: 'rate', higherIsBetter: false },
   abstention_accuracy: { label: 'Abstention accuracy', hint: 'Unanswerable questions the system correctly said it could not answer.', group: 'Abstention', kind: 'rate', higherIsBetter: true },
+  abstention_precision: { label: 'Abstention precision', hint: 'Of everything the system refused, the share that really was unanswerable.', group: 'Abstention', kind: 'rate', higherIsBetter: true },
+  abstention_f1: { label: 'Abstention F1', hint: 'Balances refusing the unanswerable (recall) against refusing only what is unanswerable (precision).', group: 'Abstention', kind: 'rate', higherIsBetter: true },
   latency_p50_ms: { label: 'Latency p50', hint: 'Median time per question.', group: 'System', kind: 'ms', higherIsBetter: false },
   latency_p95_ms: { label: 'Latency p95', hint: 'The slowest 5% of questions took longer than this.', group: 'System', kind: 'ms', higherIsBetter: false },
 }

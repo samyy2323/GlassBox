@@ -19,5 +19,8 @@ export const queryKeys = {
   experimentResults: (id: string, run: string) => ['experiment-results', id, run] as const,
   runDiff: (a: string, b: string) => ['run-diff', a, b] as const,
   calibration: (workspaceId?: string) => ['calibration', workspaceId] as const,
+  diagnosis: (experimentId: string, run: string) => ['diagnosis', experimentId, run] as const,
+  autotunes: (workspaceId?: string) => ['autotunes', workspaceId] as const,
+  autotune: (id: string) => ['autotune', id] as const,
   testsetDiff: (id: string, against: string) => ['testset-diff', id, against] as const,
 }

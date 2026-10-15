@@ -164,7 +164,7 @@ export interface TracePage {
 export type QuestionType = 'FACTUAL' | 'NUMERIC' | 'MULTI_HOP' | 'COMPARISON' | 'UNANSWERABLE'
 export type ReviewStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EDITED'
 export type TestSetStatus = 'GENERATING' | 'DRAFT' | 'FINAL' | 'FAILED'
-export type QualityFlag = 'COPY_RISK' | 'AMBIGUOUS' | 'LOW_ANSWERABILITY' | 'DUPLICATE'
+export type QualityFlag = 'COPY_RISK' | 'AMBIGUOUS' | 'LOW_ANSWERABILITY' | 'DUPLICATE' | 'ANSWERABLE_RISK'
 
 export interface TestSetStats {
   total: number
@@ -253,6 +253,20 @@ export interface ConfigInput {
   reranker?: 'NONE' | 'CROSS_ENCODER'
   topN?: number
   tokenBudget?: number
+  chunking?: Chunking
+  embeddingModel?: string
+}
+export interface Chunking {
+  strategy: 'fixed' | 'recursive' | 'structure' | 'parent_child'
+  size: number
+  overlapPct: number
+}
+export interface PipelineConfig {
+  retrieval: { mode: string; model?: string; rrfK: number; wVec: number; wKw: number; kFused: number }
+  reranker: string
+  topN: number
+  tokenBudget: number
+  chunking?: Chunking
 }
 export interface MetricValue {
   metric: string
@@ -269,7 +283,7 @@ export interface RunSummary {
   ordinal: number
   status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED'
   samplesDone: number
-  config: { retrieval: { mode: string; rrfK: number; wVec: number; wKw: number; kFused: number }; reranker: string; topN: number; tokenBudget: number }
+  config: PipelineConfig
   metrics: MetricValue[]
 }
 export interface ComparisonRow {
@@ -365,6 +379,156 @@ export interface RunDiff {
   flipMetric: string
   passToFail: Flip[]
   failToPass: Flip[]
+}
+export type FailureStage = 'CHUNKING_MISS' | 'RETRIEVAL_MISS' | 'RANKING_MISS' | 'CONTEXT_MISS' | 'PARTIAL_RETRIEVAL' | 'GENERATION_MISS' | 'HALLUCINATED_ANSWER' | 'BAD_TEST_QUESTION'
+export type FailureSub = 'UNFAITHFUL' | 'INCOMPLETE' | 'WRONG_REASONING' | 'FALSE_ABSTENTION'
+export interface Recommendation {
+  stage: FailureStage
+  sub?: FailureSub
+  count: number
+  percent: number
+  text: string
+  /** The one setting to change, in the shape of an experiment configuration; absent when there is no one-click change. */
+  change?: Partial<ConfigInput>
+  changeLabel?: string
+}
+export interface Diagnosis {
+  experimentId: string
+  runId: string
+  runLabel: string
+  mode: ExperimentMode
+  config: PipelineConfig
+  questions: number
+  failed: number
+  byStage: Record<string, number>
+  byStageAndType: Record<string, Record<string, number>>
+  bySub: Record<string, number>
+  recommendations: Recommendation[]
+  failures: { questionId: string; question: string; qtype: string; stage: FailureStage; sub?: FailureSub; lostAt?: FailureStage; traceId?: string }[]
+}
+
+export type AutotuneStatus = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED'
+export type AutotuneObjective = 'BEST_QUALITY' | 'CHEAPEST_ABOVE_FLOOR' | 'FASTEST_WITHIN_CAP'
+export interface AutotuneRequest {
+  testsetId: string
+  name?: string
+  objective?: AutotuneObjective
+  qualityFloor?: number
+  latencyCapMs?: number
+  fullStage?: boolean
+  stage1Candidates?: number
+  stage2Candidates?: number
+  finalists?: number
+  fullQuestions?: number
+  capMinutes?: number
+  capLlmCalls?: number
+  capSearches?: number
+}
+export interface AutotuneEstimate {
+  tuningQuestions: number
+  heldOutQuestions: number
+  stage1Candidates: number
+  stage2Candidates: number
+  finalists: number
+  retrievalCalls: number
+  llmCalls: number
+  notes: string[]
+}
+export interface AutotuneHeldOut {
+  quality: number
+  ciLow: number
+  ciHigh: number
+  n: number
+  contextRecall?: number
+  correctness?: number
+  faithfulness?: number
+  promptTokens: number
+  latencyMs: number
+}
+export interface AutotuneVsBaseline {
+  delta: number
+  ciLow: number
+  ciHigh: number
+  p: number
+  pAdjusted: number
+  outcome: Outcome
+  verdict: string
+  minDetectable?: number
+}
+export interface AutotuneCandidate {
+  key: string
+  label: string
+  config: PipelineConfig
+  settings: Record<string, string>
+  role: 'BASELINE' | 'FINALIST' | 'WINNER'
+  heldOutRunId: string
+  tuningRunId?: string
+  tuning?: { quality: number; n: number }
+  heldOut: AutotuneHeldOut
+  vsBaseline?: AutotuneVsBaseline
+  onFrontier: boolean
+}
+export interface AutotuneEffect {
+  stage: 'STAGE1' | 'STAGE2'
+  dimension: string
+  value: string
+  averageQuality: number
+  n: number
+}
+export interface AutotuneResult {
+  headline: {
+    mode: ExperimentMode
+    qualityDefinition: string
+    winnerKey: string
+    winnerLabel: string
+    winnerConfig: PipelineConfig
+    baselineLabel: string
+    winnerIsBaseline: boolean
+    tuning?: { quality: number; n: number }
+    heldOut: AutotuneHeldOut
+    baselineHeldOut: AutotuneHeldOut
+    verdict: string
+    vsBaseline?: AutotuneVsBaseline
+    heldOutQuestions: number
+    tuningQuestions: number
+    shrinkage?: number
+  }
+  candidates: AutotuneCandidate[]
+  frontier: string[]
+  recommendations: { bestQuality?: string; bestValue?: string; fastest?: string }
+  effects: AutotuneEffect[]
+  stages: { stage1: { candidates: number; rounds: { sample: number; entered: number; kept: number }[] }; stage2: { candidates: number; rounds: { sample: number; entered: number; kept: number }[] } }
+  stoppedBy?: string | null
+}
+export interface Autotune {
+  id: string
+  testsetId: string
+  testsetName: string
+  name: string
+  objective: AutotuneObjective
+  status: AutotuneStatus
+  stage: string
+  options: { objective: AutotuneObjective; qualityFloor: number; latencyCapMs: number; fullStage: boolean; stage1Candidates: number; stage2Candidates: number; finalists: number; fullQuestions: number; capMinutes: number; capLlmCalls: number; capSearches: number; seed: number }
+  split: Record<string, number>
+  spent: Record<string, number>
+  stoppedBy?: string
+  error?: string
+  experimentId?: string
+  result?: AutotuneResult
+  candidates: Record<string, number>
+  createdAt: string
+  finishedAt?: string
+}
+export interface AutotuneSummary {
+  id: string
+  name: string
+  testsetName: string
+  objective: AutotuneObjective
+  status: AutotuneStatus
+  stage: string
+  createdAt: string
+  finishedAt?: string
+  headline?: string
 }
 export type JudgedMetric = 'faithfulness' | 'correctness' | 'relevance'
 export interface CalibrationItem {
@@ -508,6 +672,13 @@ export const api = {
   cancelExperiment: (id: string) => request<void>(`/api/experiments/${id}/cancel`, { method: 'POST' }),
   experimentResults: (id: string, run: string) => request<ExperimentResult[]>(`/api/experiments/${id}/results?run=${run}`),
   compareRuns: (a: string, b: string) => request<RunDiff>(`/api/experiments/compare?a=${a}&b=${b}`),
+  diagnosis: (experimentId: string, run: string) => request<Diagnosis>(`/api/experiments/${experimentId}/diagnosis?run=${run}`),
+  autotunes: () => request<AutotuneSummary[]>('/api/autotune'),
+  autotune: (id: string) => request<Autotune>(`/api/autotune/${id}`),
+  estimateAutotune: (input: AutotuneRequest) => request<AutotuneEstimate>('/api/autotune/estimate', { method: 'POST', body: JSON.stringify(input) }),
+  createAutotune: (input: AutotuneRequest) => request<Autotune>('/api/autotune', { method: 'POST', body: JSON.stringify(input) }),
+  cancelAutotune: (id: string) => request<void>(`/api/autotune/${id}/cancel`, { method: 'POST' }),
+  promoteAutotune: (id: string) => request<PipelineConfig>(`/api/autotune/${id}/promote`, { method: 'POST' }),
   calibrationSummary: () => request<CalibrationSummary>('/api/calibration/summary'),
   calibrationSample: (metric: JudgedMetric, size = 40) =>
     request<CalibrationSample>('/api/calibration/sample', { method: 'POST', body: JSON.stringify({ metric, size }) }),

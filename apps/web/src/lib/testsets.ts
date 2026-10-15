@@ -9,14 +9,15 @@ export const TYPE_LABEL: Record<QuestionType, string> = {
   UNANSWERABLE: 'Unanswerable',
 }
 
-/** The types generation can produce today (unanswerable questions arrive with the retrieval-checked generator in a later phase). */
-export const GENERATABLE: QuestionType[] = ['FACTUAL', 'NUMERIC', 'MULTI_HOP', 'COMPARISON']
+/** The types generation can produce. An unanswerable question is written around a passage but asks for a detail the corpus does not state; retrieval checks it. */
+export const GENERATABLE: QuestionType[] = ['FACTUAL', 'NUMERIC', 'MULTI_HOP', 'COMPARISON', 'UNANSWERABLE']
 
 export const FLAG_LABEL: Record<QualityFlag, { label: string; hint: string }> = {
   COPY_RISK: { label: 'Copies the text', hint: 'The question repeats most of the evidence, which makes keyword search look better than it is.' },
   AMBIGUOUS: { label: 'Not self-contained', hint: 'The question only makes sense next to the source ("the document says...").' },
   LOW_ANSWERABILITY: { label: 'Hard to answer', hint: 'A model given only the evidence did not reproduce the expected answer.' },
   DUPLICATE: { label: 'Duplicate', hint: 'Very similar to an earlier question in this set.' },
+  ANSWERABLE_RISK: { label: 'May be answerable', hint: 'Meant to be unanswerable, but a model answered it from what the search found. Check the corpus before you accept it.' },
 }
 
 export const STATUS_LABEL: Record<TestSetStatus, string> = {

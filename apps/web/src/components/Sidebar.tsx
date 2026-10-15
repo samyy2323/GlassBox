@@ -1,4 +1,4 @@
-import { ChevronsUpDown, FlaskConical, Files, ListChecks, LogOut, Moon, Plus, Scale, ScanSearch, Search, Sun } from 'lucide-react'
+import { ChevronsUpDown, FlaskConical, Files, ListChecks, LogOut, Moon, Plus, Scale, ScanSearch, Search, Sun, Wand2 } from 'lucide-react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { groupByDay, useRecentTraces } from '../lib/history'
@@ -59,6 +59,7 @@ export function Sidebar({ open, onClose, onOpenPalette, theme, onToggleTheme }: 
           <NavLink to="/documents" className={navLink} onClick={onClose}><Files className="h-[17px] w-[17px]" /> Library</NavLink>
           <NavLink to="/testsets" className={navLink} onClick={onClose}><ListChecks className="h-[17px] w-[17px]" /> Test sets</NavLink>
           <NavLink to="/experiments" className={navLink} onClick={onClose}><FlaskConical className="h-[17px] w-[17px]" /> Experiments</NavLink>
+          <NavLink to="/autotune" className={navLink} onClick={onClose}><Wand2 className="h-[17px] w-[17px]" /> AutoTune</NavLink>
           <NavLink to="/calibration" className={navLink} onClick={onClose}><Scale className="h-[17px] w-[17px]" /> Calibration</NavLink>
           <NavLink to="/xray" end className={navLink} onClick={onClose}><ScanSearch className="h-[17px] w-[17px]" /> X-Ray</NavLink>
         </nav>

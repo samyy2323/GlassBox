@@ -7,7 +7,7 @@ import { cleanMix, estimateCalls, GENERATABLE, TYPE_LABEL } from '../lib/testset
 import { useWorkspace } from '../lib/workspace'
 import { Dialog } from './Dialog'
 
-const DEFAULT_MIX: Partial<Record<QuestionType, number>> = { FACTUAL: 55, NUMERIC: 15, MULTI_HOP: 15, COMPARISON: 15 }
+const DEFAULT_MIX: Partial<Record<QuestionType, number>> = { FACTUAL: 50, NUMERIC: 15, MULTI_HOP: 10, COMPARISON: 15, UNANSWERABLE: 10 }
 
 export function GenerateDialog({ existingNames, onClose, onCreated }: { existingNames: string[]; onClose: () => void; onCreated: (t: TestSet) => void }) {
   const { current } = useWorkspace()
@@ -61,7 +61,7 @@ export function GenerateDialog({ existingNames, onClose, onCreated }: { existing
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Mix of question types</legend>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {GENERATABLE.map((t) => (
               <label key={t} className="block space-y-1 text-xs text-muted">
                 {TYPE_LABEL[t]}
@@ -69,7 +69,7 @@ export function GenerateDialog({ existingNames, onClose, onCreated }: { existing
               </label>
             ))}
           </div>
-          <p className="text-xs text-muted">Shares are relative. Multi-hop and comparison questions need facts from two passages. Unanswerable questions arrive in a later phase.</p>
+          <p className="text-xs text-muted">Shares are relative. Multi-hop and comparison questions need facts from two passages. Unanswerable questions ask for a detail the documents do not state; they test whether the system admits it does not know. A model checks each against what the search finds, and flags the ones it could answer.</p>
         </fieldset>
 
         <fieldset className="space-y-2">

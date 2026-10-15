@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, FlaskConical, Loader2, Plus, X } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
-import { api, ApiError, type ConfigInput, type ExperimentMode } from '../lib/api'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { api, ApiError, type Chunking, type ConfigInput, type ExperimentMode } from '../lib/api'
 import { PRESETS, uniquePreset } from '../lib/experiments'
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
@@ -39,6 +39,32 @@ function ConfigCard({ config, index, onChange, onRemove, removable }: { config: 
         <label className="space-y-1 text-xs text-muted">Context budget
           <input className={field} type="number" min={100} max={32000} step={100} value={config.tokenBudget ?? ''} placeholder="2000" onChange={(e) => onChange({ ...config, tokenBudget: num(e.target.value) })} />
         </label>
+        <label className="space-y-1 text-xs text-muted">Chunking
+          <select className={field} value={config.chunking?.strategy ?? ''} onChange={(e) => onChange({ ...config, chunking: e.target.value === '' ? undefined : { strategy: e.target.value as Chunking['strategy'], size: config.chunking?.size ?? 512, overlapPct: 0 } })}>
+            <option value="">Default (recursive 512)</option><option value="fixed">Fixed</option><option value="recursive">Recursive</option><option value="structure">By structure</option><option value="parent_child">Parent and child</option>
+          </select>
+        </label>
+        {config.chunking && (
+          <>
+            <label className="space-y-1 text-xs text-muted">Chunk size (tokens)
+              <select className={field} value={config.chunking.size} onChange={(e) => onChange({ ...config, chunking: { ...config.chunking!, size: Number(e.target.value) } })}>
+                {[256, 512, 1024].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            {config.chunking.strategy === 'fixed' && (
+              <label className="space-y-1 text-xs text-muted">Overlap
+                <select className={field} value={config.chunking.overlapPct} onChange={(e) => onChange({ ...config, chunking: { ...config.chunking!, overlapPct: Number(e.target.value) } })}>
+                  {[0, 10, 20].map((n) => <option key={n} value={n}>{n}%</option>)}
+                </select>
+              </label>
+            )}
+          </>
+        )}
+        <label className="space-y-1 text-xs text-muted">Embedding model
+          <select className={field} value={config.embeddingModel ?? ''} onChange={(e) => onChange({ ...config, embeddingModel: e.target.value === '' ? undefined : e.target.value })}>
+            <option value="">Default (bge-small)</option><option value="bge-small-en-v1.5">bge-small</option><option value="bge-base-en-v1.5">bge-base</option><option value="all-MiniLM-L6-v2">MiniLM</option>
+          </select>
+        </label>
         {(config.mode ?? 'HYBRID') === 'HYBRID' && (
           <>
             <label className="space-y-1 text-xs text-muted">Vector weight
@@ -60,17 +86,26 @@ function ConfigCard({ config, index, onChange, onRemove, removable }: { config: 
   )
 }
 
+/** A follow-up experiment started from a recommendation arrives with its test set, mode, name and configurations already chosen. */
+interface Prefill {
+  testsetId?: string
+  mode?: ExperimentMode
+  name?: string
+  configs?: ConfigInput[]
+}
+
 export default function ExperimentNew() {
   const { current } = useWorkspace()
   const navigate = useNavigate()
+  const prefill = (useLocation().state ?? {}) as Prefill
   const sets = useQuery({ queryKey: queryKeys.testsets(current?.id), queryFn: api.testsets, enabled: !!current })
   const finals = (sets.data ?? []).filter((t) => t.status === 'FINAL').sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
-  const [testsetId, setTestsetId] = useState('')
-  const [mode, setMode] = useState<ExperimentMode>('RETRIEVAL')
-  const [name, setName] = useState('Vector vs hybrid')
+  const [testsetId, setTestsetId] = useState(prefill.testsetId ?? '')
+  const [mode, setMode] = useState<ExperimentMode>(prefill.mode ?? 'RETRIEVAL')
+  const [name, setName] = useState(prefill.name ?? 'Vector vs hybrid')
   const [limit, setLimit] = useState('')
-  const [configs, setConfigs] = useState<ConfigInput[]>([uniquePreset('vector', []), uniquePreset('hybrid', ['Vector'])])
+  const [configs, setConfigs] = useState<ConfigInput[]>(prefill.configs ?? [uniquePreset('vector', []), uniquePreset('hybrid', ['Vector'])])
   const chosen = testsetId || finals[0]?.id || ''
   const questionLimit = limit.trim() === '' || Number(limit) < 1 ? undefined : Math.floor(Number(limit))
 
