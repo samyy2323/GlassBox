@@ -116,6 +116,7 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO run_metrics (run_id, workspace_id, metric, n) VALUES (?, ?, ?, 1)", runA, ws, "m-" + canary);
             exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
             // P5 tables
+            exec(c, "INSERT INTO feedback (workspace_id, question, rating) VALUES (?, ?, 'DOWN')", ws, canary);
             exec(c, "INSERT INTO pricing (workspace_id, model, prompt_usd_per_million, completion_usd_per_million) VALUES (?, ?, 1, 2)", ws, "m-" + canary);
             exec(c, "INSERT INTO budgets (workspace_id, monthly_usd) VALUES (?, 5)", ws);
             exec(c, "INSERT INTO spend_log (workspace_id, kind, ref_id) VALUES (?, 'EXPERIMENT', ?)", ws, UUID.randomUUID());

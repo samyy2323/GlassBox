@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Citation } from '../lib/api'
 import { progressSteps, type Turn } from '../lib/chatState'
 import { RichText } from '../lib/richText'
+import { Thumbs } from './Thumbs'
 
 export function UserMessage({ text }: { text: string }) {
   return (
@@ -166,6 +167,7 @@ export function AssistantMessage({ turn, isLast, activeLabel, onOpenSource, onRe
             {isLast && turn.status !== 'error' && (
               <button className="btn-ghost !px-2 !py-1" onClick={onRegenerate}><RotateCcw className="h-3.5 w-3.5" /> Regenerate</button>
             )}
+            {turn.traceId && turn.status === 'done' && <Thumbs traceId={turn.traceId} />}
             {turn.traceId && (
               <Link to={`/xray/${turn.traceId}`} className="btn-ghost !px-2 !py-1"><ScanSearch className="h-3.5 w-3.5" /> How this was made</Link>
             )}

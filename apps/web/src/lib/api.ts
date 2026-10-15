@@ -176,6 +176,7 @@ export interface TestSetStats {
   acceptanceRate?: number
   byType: Record<string, number>
   byFlag: Record<string, number>
+  fromFeedback?: number
 }
 export interface TestSet {
   id: string
@@ -539,6 +540,49 @@ export interface AutotuneSummary {
   finishedAt?: string
   headline?: string
 }
+export interface FeedbackItem {
+  id: string
+  traceId?: string
+  question: string
+  answer?: string
+  rating: 'UP' | 'DOWN'
+  comment?: string
+  status: 'OPEN' | 'CONVERTED' | 'DISMISSED'
+  convertedQuestionId?: string
+  createdAt: string
+}
+export interface FeedbackPassage {
+  documentId: string
+  title: string
+  page?: number
+  charStart: number
+  charEnd: number
+  snippet: string
+  disposition: 'IN_CONTEXT' | 'DROPPED' | 'CUT'
+  rank?: number
+}
+export interface FeedbackDetail {
+  item: FeedbackItem
+  traceAvailable: boolean
+  warnings: string[]
+  retrieved: FeedbackPassage[]
+}
+export interface FeedbackDiagnosed {
+  stage?: string
+  lostAt?: string
+  retrievalProblem: boolean
+  message: string
+  warnings: string[]
+}
+export interface FeedbackSummary {
+  open: number
+  converted: number
+  dismissed: number
+  down: number
+  up: number
+  questionsFromFeedback: number
+  questionsTotal: number
+}
 export interface ModelPrice {
   model: string
   promptUsdPerMillion: number
@@ -703,6 +747,15 @@ export const api = {
     request<Estimate>('/api/experiments/estimate', { method: 'POST', body: JSON.stringify({ testsetId, mode, configs, questionLimit }) }),
   createExperiment: (testsetId: string, name: string, mode: ExperimentMode, configs: ConfigInput[], questionLimit?: number, limits: RunLimits = {}) =>
     request<Experiment>('/api/experiments', { method: 'POST', body: JSON.stringify({ testsetId, name, mode, configs, questionLimit, ...limits }) }),
+  giveFeedback: (traceId: string, rating: 'UP' | 'DOWN', comment?: string) =>
+    request<FeedbackItem>(`/api/traces/${traceId}/feedback`, { method: 'POST', body: JSON.stringify({ rating, comment }) }),
+  feedbackList: (status: string) => request<FeedbackItem[]>(`/api/feedback?status=${status}`),
+  feedbackSummary: () => request<FeedbackSummary>('/api/feedback/summary'),
+  feedbackDetail: (id: string) => request<FeedbackDetail>(`/api/feedback/${id}`),
+  diagnoseFeedback: (id: string, spans: SpanInput[]) => request<FeedbackDiagnosed>(`/api/feedback/${id}/diagnose`, { method: 'POST', body: JSON.stringify({ spans }) }),
+  convertFeedback: (id: string, body: { testsetId: string; expectedAnswer?: string; qtype?: string; spans: SpanInput[] }) =>
+    request<{ item: FeedbackItem; testsetId: string; newVersion: boolean }>(`/api/feedback/${id}/convert`, { method: 'POST', body: JSON.stringify(body) }),
+  dismissFeedback: (id: string) => request<FeedbackItem>(`/api/feedback/${id}/dismiss`, { method: 'POST' }),
   budget: () => request<BudgetOverview>('/api/budget'),
   setBudget: (b: BudgetLimits) => request<BudgetLimits>('/api/budget', { method: 'PUT', body: JSON.stringify(b) }),
   setPrice: (p: ModelPrice) => request<ModelPrice[]>('/api/budget/prices', { method: 'PUT', body: JSON.stringify(p) }),

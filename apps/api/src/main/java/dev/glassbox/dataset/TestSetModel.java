@@ -10,7 +10,7 @@ public final class TestSetModel {
     private TestSetModel() {}
 
     public record Stats(int total, int pending, int accepted, int edited, int rejected, Double acceptanceRate,
-                        Map<String, Integer> byType, Map<String, Integer> byFlag) {}
+                        Map<String, Integer> byType, Map<String, Integer> byFlag, int fromFeedback) {}
 
     public record TestSet(UUID id, String name, int version, UUID parentVersionId, String status, int targetCount, int generatedCount,
                           String error, OffsetDateTime createdAt, OffsetDateTime finalizedAt, Stats stats) {}

@@ -143,7 +143,8 @@ public class TestSetService {
         j.query("SELECT f, count(*) FROM test_questions, unnest(quality_flags) AS f WHERE testset_id = ? GROUP BY f ORDER BY f", rs -> { byFlag.put(rs.getString(1), rs.getInt(2)); }, id);
         int pending = status.getOrDefault("PENDING", 0), accepted = status.getOrDefault("ACCEPTED", 0);
         int edited = status.getOrDefault("EDITED", 0), rejected = status.getOrDefault("REJECTED", 0);
-        return new Stats(pending + accepted + edited + rejected, pending, accepted, edited, rejected, acceptanceRate(accepted, edited, rejected), byType, byFlag);
+        int fromFeedback = j.queryForObject("SELECT count(*) FROM test_questions WHERE testset_id = ? AND origin = 'FEEDBACK' AND review_status <> 'REJECTED'", Integer.class, id);
+        return new Stats(pending + accepted + edited + rejected, pending, accepted, edited, rejected, acceptanceRate(accepted, edited, rejected), byType, byFlag, fromFeedback);
     }
 
     private static final String Q_COLS = "id, stable_id, testset_id, question, expected_answer, qtype, origin, review_status, quality_flags, gold_chunk_spans::text AS spans, created_at, seq";
@@ -271,6 +272,15 @@ public class TestSetService {
     }
 
     public Question addManual(Principal p, UUID ws, UUID setId, String question, String expected, String qtype, List<SpanInput> spans) {
+        return add(p, ws, setId, question, expected, qtype, spans, "MANUAL", null);
+    }
+
+    /** A question that comes from a real failure: the trace it came from is kept, and the question is marked FEEDBACK so the dashboard can count it. */
+    public Question addFromFeedback(Principal p, UUID ws, UUID setId, String question, String expected, String qtype, List<SpanInput> spans, UUID traceId) {
+        return add(p, ws, setId, question, expected, qtype, spans, "FEEDBACK", traceId);
+    }
+
+    private Question add(Principal p, UUID ws, UUID setId, String question, String expected, String qtype, List<SpanInput> spans, String origin, UUID sourceTraceId) {
         if (qtype == null || !MANUAL_TYPES.contains(qtype)) throw ApiException.badRequest("qtype must be one of " + MANUAL_TYPES);
         String q = cleanText(question, "question", 600);
         String a = cleanText(expected, "expectedAnswer", 2000);
@@ -279,8 +289,8 @@ public class TestSetService {
             requireDraft(statusOf(j, setId));
             List<GoldSpan> resolved = resolveSpans(j, spans == null ? List.of() : spans);
             if (resolved.isEmpty() && !qtype.equals("UNANSWERABLE")) throw ApiException.badRequest("Select the evidence text this question is answered from");
-            UUID id = j.queryForObject("INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, gold_chunk_spans, qtype, origin, review_status) "
-                    + "VALUES (?, ?, ?, ?, ?::jsonb, ?, 'MANUAL', 'ACCEPTED') RETURNING id", UUID.class, ws, setId, q, a, writeSpans(resolved), qtype);
+            UUID id = j.queryForObject("INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, gold_chunk_spans, qtype, origin, review_status, source_trace_id) "
+                    + "VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, 'ACCEPTED', ?) RETURNING id", UUID.class, ws, setId, q, a, writeSpans(resolved), qtype, origin, sourceTraceId);
             audit(j, ws, p.actor(), "testset.question.add", "question:" + id);
             return hydrate(j, j.query("SELECT " + Q_COLS + " FROM test_questions WHERE id = ?", RAW, id)).get(0);
         });
