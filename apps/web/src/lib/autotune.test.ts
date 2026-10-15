@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutotuneEffect, Diagnosis, PipelineConfig, Recommendation } from './api'
-import { describeConfig, effectGroups, frontierPath, niceDomain, placePoints, shrinkageText, stepStates, type PlotPoint } from './autotune'
+import { describeConfig, effectGroups, frontierPath, niceDomain, placePoints, qualityDomain, shrinkageText, stepStates, type PlotPoint } from './autotune'
 import { configToInput, followUpConfigs, stageBars, stageTypeMatrix } from './diagnosis'
 
 const point = (key: string, quality: number, cost: number, frontier = false): PlotPoint => ({ key, label: key, quality, cost, latencyMs: 10, frontier, role: 'FINALIST' })
@@ -20,6 +20,19 @@ describe('the quality against cost plot', () => {
     expect(niceDomain([0.5], 0.05, 0)[1]).toBeGreaterThan(niceDomain([0.5], 0.05, 0)[0])
     expect(niceDomain([], 100, 0)).toEqual([0, 100])
     expect(niceDomain([420, 900], 100, 0)).toEqual([400, 900])
+  })
+
+  it('keeps the quality axis within 0 and 100% whatever the values', () => {
+    expect(qualityDomain([1, 1, 1])).toEqual([0.9, 1])
+    expect(qualityDomain([0.62, 0.81])).toEqual([0.55, 0.9])
+    expect(qualityDomain([0, 0])).toEqual([0, 0.05])
+    expect(qualityDomain([])).toEqual([0, 1])
+    for (const v of [[0.97], [0.5, 1], [0.01, 0.02]]) {
+      const [lo, hi] = qualityDomain(v)
+      expect(lo).toBeGreaterThanOrEqual(0)
+      expect(hi).toBeLessThanOrEqual(1)
+      expect(hi - lo).toBeGreaterThanOrEqual(0.05 - 1e-9)
+    }
   })
 
   it('puts cheap on the left and good at the top', () => {

@@ -64,12 +64,23 @@ export function niceDomain(values: number[], step: number, floor?: number): [num
   return [lo, hi]
 }
 
+/** The y axis of the quality plot: a rate, so never past 0 and 100%, padded so points do not sit on the border, and never degenerate when every value is equal. */
+export function qualityDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 1]
+  const lo = Math.min(...values), hi = Math.max(...values)
+  const pad = Math.max(0.05, (hi - lo) * 0.2)
+  const clean = (v: number) => Math.round(v * 1e6) / 1e6
+  let a = clean(Math.max(0, Math.floor((lo - pad) / 0.05) * 0.05))
+  let b = clean(Math.min(1, Math.ceil((hi + pad) / 0.05) * 0.05))
+  if (b - a < 0.05) a = clean(Math.max(0, b - 0.05))
+  if (b - a < 0.05) b = clean(a + 0.05)
+  return [a, b]
+}
+
 /** Position candidates on a plot of prompt tokens (left to right, less is better) against held-out quality (bottom to top). */
 export function placePoints(points: PlotPoint[], width: number, height: number): { placed: Placed[]; xDomain: [number, number]; yDomain: [number, number] } {
   const xDomain = niceDomain(points.map((p) => p.cost), 100, 0)
-  const yDomain = niceDomain(points.map((p) => p.quality), 0.05, 0)
-  const clampTop = Math.min(1, yDomain[1])
-  const yd: [number, number] = [yDomain[0], clampTop <= yDomain[0] ? yDomain[0] + 0.05 : clampTop]
+  const yd = qualityDomain(points.map((p) => p.quality))
   const placed = points.map((p) => ({
     ...p,
     x: ((p.cost - xDomain[0]) / (xDomain[1] - xDomain[0])) * width,

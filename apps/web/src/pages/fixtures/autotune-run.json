@@ -1,0 +1,586 @@
+{
+ "id": "d19138c0-3f77-4f72-ab01-efb272eb958d",
+ "testsetId": "6ca65448-5af8-421d-9741-a6aa0a9eaec8",
+ "testsetName": "Fixture test set",
+ "name": "Smoke test",
+ "objective": "BEST_QUALITY",
+ "status": "DONE",
+ "stage": "DONE",
+ "options": {
+  "objective": "BEST_QUALITY",
+  "qualityFloor": 0.8,
+  "latencyCapMs": 1500,
+  "fullStage": false,
+  "stage1Candidates": 8,
+  "stage2Candidates": 8,
+  "finalists": 3,
+  "fullQuestions": 20,
+  "capMinutes": 60,
+  "capLlmCalls": 600,
+  "capSearches": 20000,
+  "seed": 2026
+ },
+ "split": {
+  "seed": 2026,
+  "tuning": 30,
+  "heldOut": 13,
+  "tuningAnswerable": 30,
+  "heldOutAnswerable": 13
+ },
+ "spent": {
+  "llmCalls": 0,
+  "elapsedMs": 415882,
+  "retrievalCalls": 334
+ },
+ "experimentId": "512d79d1-138e-4254-bc97-16ebf23c9aeb",
+ "result": {
+  "stages": {
+   "stage1": {
+    "rounds": [
+     {
+      "kept": 3,
+      "sample": 8,
+      "entered": 8
+     },
+     {
+      "kept": 3,
+      "sample": 16,
+      "entered": 3
+     },
+     {
+      "kept": 3,
+      "sample": 30,
+      "entered": 3
+     }
+    ],
+    "candidates": 8
+   },
+   "stage2": {
+    "rounds": [
+     {
+      "kept": 3,
+      "sample": 8,
+      "entered": 8
+     },
+     {
+      "kept": 3,
+      "sample": 16,
+      "entered": 3
+     },
+     {
+      "kept": 3,
+      "sample": 30,
+      "entered": 3
+     }
+    ],
+    "candidates": 8
+   }
+  },
+  "effects": [
+   {
+    "n": 5,
+    "stage": "STAGE1",
+    "value": "fixed",
+    "dimension": "chunking",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 1,
+    "stage": "STAGE1",
+    "value": "structure",
+    "dimension": "chunking",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE1",
+    "value": "parent_child",
+    "dimension": "chunking",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 5,
+    "stage": "STAGE1",
+    "value": "512",
+    "dimension": "chunk size",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE1",
+    "value": "256",
+    "dimension": "chunk size",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 1,
+    "stage": "STAGE1",
+    "value": "1024",
+    "dimension": "chunk size",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 6,
+    "stage": "STAGE1",
+    "value": "0%",
+    "dimension": "overlap",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE1",
+    "value": "20%",
+    "dimension": "overlap",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 1,
+    "stage": "STAGE1",
+    "value": "bge-small-en-v1.5",
+    "dimension": "embedding model",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE1",
+    "value": "bge-base-en-v1.5",
+    "dimension": "embedding model",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 5,
+    "stage": "STAGE1",
+    "value": "all-MiniLM-L6-v2",
+    "dimension": "embedding model",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 3,
+    "stage": "STAGE2",
+    "value": "vector",
+    "dimension": "retriever",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE2",
+    "value": "hybrid 1:1",
+    "dimension": "retriever",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 1,
+    "stage": "STAGE2",
+    "value": "hybrid 1:2",
+    "dimension": "retriever",
+    "averageQuality": 0.875
+   },
+   {
+    "n": 2,
+    "stage": "STAGE2",
+    "value": "hybrid 2:1",
+    "dimension": "retriever",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "50",
+    "dimension": "candidates",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "20",
+    "dimension": "candidates",
+    "averageQuality": 0.96875
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "none",
+    "dimension": "reranker",
+    "averageQuality": 0.96875
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "cross-encoder",
+    "dimension": "reranker",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "5",
+    "dimension": "top n",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 3,
+    "stage": "STAGE2",
+    "value": "10",
+    "dimension": "top n",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 1,
+    "stage": "STAGE2",
+    "value": "3",
+    "dimension": "top n",
+    "averageQuality": 0.875
+   },
+   {
+    "n": 4,
+    "stage": "STAGE2",
+    "value": "3000",
+    "dimension": "context budget",
+    "averageQuality": 1.0
+   },
+   {
+    "n": 2,
+    "stage": "STAGE2",
+    "value": "2000",
+    "dimension": "context budget",
+    "averageQuality": 0.9375
+   },
+   {
+    "n": 2,
+    "stage": "STAGE2",
+    "value": "6000",
+    "dimension": "context budget",
+    "averageQuality": 1.0
+   }
+  ],
+  "frontier": [
+   "fixed|512|0%|bge-small-en-v1.5|vector|50|none|5|3000"
+  ],
+  "headline": {
+   "mode": "RETRIEVAL",
+   "tuning": {
+    "n": 30,
+    "quality": 1.0
+   },
+   "heldOut": {
+    "n": 13,
+    "ciLow": 1.0,
+    "ciHigh": 1.0,
+    "quality": 1.0,
+    "latencyMs": 2312.0,
+    "promptTokens": 1973.923076923077,
+    "contextRecall": 1.0
+   },
+   "verdict": "No significant difference (CI [+0.0, +0.0], p=1.00)",
+   "shrinkage": 0.0,
+   "winnerKey": "fixed|512|0%|all-MiniLM-L6-v2|hybrid 1:1|50|cross-encoder|5|3000",
+   "vsBaseline": {
+    "p": 1.0,
+    "ciLow": 0.0,
+    "delta": 0.0,
+    "ciHigh": 0.0,
+    "outcome": "NO_DIFFERENCE",
+    "verdict": "No significant difference (CI [+0.0, +0.0], p=1.00)",
+    "pAdjusted": 1.0,
+    "minDetectable": 0.0
+   },
+   "winnerLabel": "fixed 512 · all-MiniLM-L6-v2 · hybrid 1:1 · top 5 · rerank",
+   "winnerConfig": {
+    "topN": 5,
+    "chunking": {
+     "size": 512,
+     "strategy": "fixed",
+     "overlapPct": 0
+    },
+    "reranker": "CROSS_ENCODER",
+    "retrieval": {
+     "kKw": 50,
+     "wKw": 1.0,
+     "kVec": 50,
+     "mode": "HYBRID",
+     "rrfK": 60,
+     "wVec": 1.0,
+     "model": "all-MiniLM-L6-v2",
+     "kFused": 50,
+     "efSearch": 100,
+     "keywordMatch": "ANY"
+    },
+    "tokenBudget": 3000,
+    "rerankCandidates": 50
+   },
+   "baselineLabel": "fixed 512 · bge-small-en-v1.5 · vector · top 5",
+   "baselineHeldOut": {
+    "n": 13,
+    "ciLow": 1.0,
+    "ciHigh": 1.0,
+    "quality": 1.0,
+    "latencyMs": 25.0,
+    "promptTokens": 1631.2307692307693,
+    "contextRecall": 1.0
+   },
+   "tuningQuestions": 30,
+   "heldOutQuestions": 13,
+   "winnerIsBaseline": false,
+   "qualityDefinition": "context recall only: answers were not generated, so correctness and faithfulness are not part of the score"
+  },
+  "candidates": [
+   {
+    "key": "fixed|512|0%|bge-small-en-v1.5|vector|50|none|5|3000",
+    "role": "BASELINE",
+    "label": "fixed 512 · bge-small-en-v1.5 · vector · top 5",
+    "config": {
+     "topN": 5,
+     "chunking": {
+      "size": 512,
+      "strategy": "fixed",
+      "overlapPct": 0
+     },
+     "reranker": "NONE",
+     "retrieval": {
+      "kKw": 50,
+      "wKw": 1.0,
+      "kVec": 50,
+      "mode": "VECTOR",
+      "rrfK": 60,
+      "wVec": 1.0,
+      "model": "bge-small-en-v1.5",
+      "kFused": 50,
+      "efSearch": 100,
+      "keywordMatch": "ANY"
+     },
+     "tokenBudget": 3000,
+     "rerankCandidates": 50
+    },
+    "tuning": {
+     "n": 30,
+     "quality": 1.0
+    },
+    "heldOut": {
+     "n": 13,
+     "ciLow": 1.0,
+     "ciHigh": 1.0,
+     "quality": 1.0,
+     "latencyMs": 25.0,
+     "promptTokens": 1631.2307692307693,
+     "contextRecall": 1.0
+    },
+    "settings": {
+     "top n": "5",
+     "overlap": "0%",
+     "chunking": "fixed",
+     "reranker": "none",
+     "retriever": "vector",
+     "candidates": "50",
+     "chunk size": "512",
+     "context budget": "3000",
+     "embedding model": "bge-small-en-v1.5"
+    },
+    "onFrontier": true,
+    "heldOutRunId": "0ff60e35-0eec-44c7-bd07-ca648f7a1241"
+   },
+   {
+    "key": "fixed|512|0%|all-MiniLM-L6-v2|hybrid 1:1|50|cross-encoder|5|3000",
+    "role": "WINNER",
+    "label": "fixed 512 · all-MiniLM-L6-v2 · hybrid 1:1 · top 5 · rerank",
+    "config": {
+     "topN": 5,
+     "chunking": {
+      "size": 512,
+      "strategy": "fixed",
+      "overlapPct": 0
+     },
+     "reranker": "CROSS_ENCODER",
+     "retrieval": {
+      "kKw": 50,
+      "wKw": 1.0,
+      "kVec": 50,
+      "mode": "HYBRID",
+      "rrfK": 60,
+      "wVec": 1.0,
+      "model": "all-MiniLM-L6-v2",
+      "kFused": 50,
+      "efSearch": 100,
+      "keywordMatch": "ANY"
+     },
+     "tokenBudget": 3000,
+     "rerankCandidates": 50
+    },
+    "tuning": {
+     "n": 30,
+     "quality": 1.0
+    },
+    "heldOut": {
+     "n": 13,
+     "ciLow": 1.0,
+     "ciHigh": 1.0,
+     "quality": 1.0,
+     "latencyMs": 2312.0,
+     "promptTokens": 1973.923076923077,
+     "contextRecall": 1.0
+    },
+    "settings": {
+     "top n": "5",
+     "overlap": "0%",
+     "chunking": "fixed",
+     "reranker": "cross-encoder",
+     "retriever": "hybrid 1:1",
+     "candidates": "50",
+     "chunk size": "512",
+     "context budget": "3000",
+     "embedding model": "all-MiniLM-L6-v2"
+    },
+    "onFrontier": false,
+    "vsBaseline": {
+     "p": 1.0,
+     "ciLow": 0.0,
+     "delta": 0.0,
+     "ciHigh": 0.0,
+     "outcome": "NO_DIFFERENCE",
+     "verdict": "No significant difference (CI [+0.0, +0.0], p=1.00)",
+     "pAdjusted": 1.0,
+     "minDetectable": 0.0
+    },
+    "heldOutRunId": "35a1bbc7-1a2e-4bae-97bd-bfc3e8a3dfee"
+   },
+   {
+    "key": "fixed|512|0%|all-MiniLM-L6-v2|hybrid 1:1|50|cross-encoder|10|3000",
+    "role": "FINALIST",
+    "label": "fixed 512 · all-MiniLM-L6-v2 · hybrid 1:1 · top 10 · rerank",
+    "config": {
+     "topN": 10,
+     "chunking": {
+      "size": 512,
+      "strategy": "fixed",
+      "overlapPct": 0
+     },
+     "reranker": "CROSS_ENCODER",
+     "retrieval": {
+      "kKw": 50,
+      "wKw": 1.0,
+      "kVec": 50,
+      "mode": "HYBRID",
+      "rrfK": 60,
+      "wVec": 1.0,
+      "model": "all-MiniLM-L6-v2",
+      "kFused": 50,
+      "efSearch": 100,
+      "keywordMatch": "ANY"
+     },
+     "tokenBudget": 3000,
+     "rerankCandidates": 50
+    },
+    "tuning": {
+     "n": 30,
+     "quality": 1.0
+    },
+    "heldOut": {
+     "n": 13,
+     "ciLow": 1.0,
+     "ciHigh": 1.0,
+     "quality": 1.0,
+     "latencyMs": 2371.0,
+     "promptTokens": 2824.923076923077,
+     "contextRecall": 1.0
+    },
+    "settings": {
+     "top n": "10",
+     "overlap": "0%",
+     "chunking": "fixed",
+     "reranker": "cross-encoder",
+     "retriever": "hybrid 1:1",
+     "candidates": "50",
+     "chunk size": "512",
+     "context budget": "3000",
+     "embedding model": "all-MiniLM-L6-v2"
+    },
+    "onFrontier": false,
+    "vsBaseline": {
+     "p": 1.0,
+     "ciLow": 0.0,
+     "delta": 0.0,
+     "ciHigh": 0.0,
+     "outcome": "NO_DIFFERENCE",
+     "verdict": "No significant difference (CI [+0.0, +0.0], p=1.00)",
+     "pAdjusted": 1.0,
+     "minDetectable": 0.0
+    },
+    "heldOutRunId": "244c9eec-61ec-47fe-b71e-c8944383514f"
+   },
+   {
+    "key": "fixed|512|0%|all-MiniLM-L6-v2|hybrid 2:1|20|cross-encoder|10|6000",
+    "role": "FINALIST",
+    "label": "fixed 512 · all-MiniLM-L6-v2 · hybrid 2:1 · top 10 · rerank",
+    "config": {
+     "topN": 10,
+     "chunking": {
+      "size": 512,
+      "strategy": "fixed",
+      "overlapPct": 0
+     },
+     "reranker": "CROSS_ENCODER",
+     "retrieval": {
+      "kKw": 50,
+      "wKw": 1.0,
+      "kVec": 50,
+      "mode": "HYBRID",
+      "rrfK": 60,
+      "wVec": 2.0,
+      "model": "all-MiniLM-L6-v2",
+      "kFused": 20,
+      "efSearch": 100,
+      "keywordMatch": "ANY"
+     },
+     "tokenBudget": 6000,
+     "rerankCandidates": 50
+    },
+    "tuning": {
+     "n": 30,
+     "quality": 1.0
+    },
+    "heldOut": {
+     "n": 13,
+     "ciLow": 1.0,
+     "ciHigh": 1.0,
+     "quality": 1.0,
+     "latencyMs": 2425.0,
+     "promptTokens": 3518.0,
+     "contextRecall": 1.0
+    },
+    "settings": {
+     "top n": "10",
+     "overlap": "0%",
+     "chunking": "fixed",
+     "reranker": "cross-encoder",
+     "retriever": "hybrid 2:1",
+     "candidates": "20",
+     "chunk size": "512",
+     "context budget": "6000",
+     "embedding model": "all-MiniLM-L6-v2"
+    },
+    "onFrontier": false,
+    "vsBaseline": {
+     "p": 1.0,
+     "ciLow": 0.0,
+     "delta": 0.0,
+     "ciHigh": 0.0,
+     "outcome": "NO_DIFFERENCE",
+     "verdict": "No significant difference (CI [+0.0, +0.0], p=1.00)",
+     "pAdjusted": 1.0,
+     "minDetectable": 0.0
+    },
+    "heldOutRunId": "60f16e7e-87f1-431d-a875-02180ce55282"
+   }
+  ],
+  "recommendations": {
+   "fastest": "fixed|512|0%|bge-small-en-v1.5|vector|50|none|5|3000",
+   "bestValue": "fixed|512|0%|bge-small-en-v1.5|vector|50|none|5|3000",
+   "bestQuality": "fixed|512|0%|bge-small-en-v1.5|vector|50|none|5|3000"
+  }
+ },
+ "candidates": {
+  "STAGE1": 8,
+  "STAGE2": 8
+ },
+ "createdAt": "2026-10-15T04:55:01.335219Z",
+ "finishedAt": "2026-10-15T05:01:59.22276Z"
+}
