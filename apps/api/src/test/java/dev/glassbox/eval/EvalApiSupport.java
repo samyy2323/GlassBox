@@ -32,6 +32,12 @@ abstract class EvalApiSupport extends ApiTestSupport {
         return sb.toString();
     }
 
+    /** Like {@link #markdown} but every section also carries a long filler paragraph, so each chunk is far larger than a small token budget. */
+    static String bulkyMarkdown(String topic, int sections, int salt) {
+        String filler = "Routine maintenance notes continue with general remarks about housekeeping, shift handover and similar everyday matters. ".repeat(14);
+        return markdown(topic, sections, salt).replaceAll("(Unique marker [0-9a-f-]+ ends this part)", filler + "$1");
+    }
+
     Account accountWithDocs(int docs, int sections) throws Exception {
         Account a = register();
         for (int i = 0; i < docs; i++) uploadOk(a, "Doc" + i + ".md", markdown("Topic" + i, sections, i).getBytes(StandardCharsets.UTF_8));

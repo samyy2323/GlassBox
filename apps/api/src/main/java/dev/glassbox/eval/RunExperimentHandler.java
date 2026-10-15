@@ -3,6 +3,7 @@ package dev.glassbox.eval;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.glassbox.diagnose.FailureClassifier;
 import dev.glassbox.eval.ExperimentModel.RunComparison;
 import dev.glassbox.eval.ExperimentModel.RunView;
 import dev.glassbox.eval.RetrievalMetrics.Gold;
@@ -158,11 +159,6 @@ public class RunExperimentHandler implements JobHandler {
                 if (c.kwRank() != null) m.put("kwRank", c.kwRank());
                 retrieved.add(m);
             }
-            if (metrics.get(RetrievalMetrics.CONTEXT_PASS) < 1.0) {
-                if (RetrievalMetrics.recallAtK(result.candidates().stream().map(RunExperimentHandler::ref).toList(), gold, Integer.MAX_VALUE) < 1.0) failure = "RETRIEVAL_MISS";
-                else if (RetrievalMetrics.recallAtK(result.ranked().stream().map(RunExperimentHandler::ref).toList(), gold, Integer.MAX_VALUE) < 1.0) failure = "RANKING_MISS";
-                else failure = "CONTEXT_MISS";
-            }
         }
         result.context().included().forEach(c -> finalContext.add(Map.of("label", c.label(), "chunkId", c.chunk().chunkId(), "documentId", c.chunk().documentId(),
                 "charStart", c.chunk().charStart(), "charEnd", c.chunk().charEnd())));
@@ -184,6 +180,23 @@ public class RunExperimentHandler implements JobHandler {
         }
         long latency = full ? (System.nanoTime() - started) / 1_000_000 : result.spans().stream().mapToLong(Span::millis).sum();
 
+        List<FailureClassifier.SpanTrace> traces = new ArrayList<>();
+        List<Map<String, Object>> spanDetail = new ArrayList<>();
+        for (Gold g : gold) traceSpan(ws, result, g, traces, spanDetail);
+        boolean abstained = full && (q.spans().isEmpty() ? metrics.getOrDefault(Metrics.ABSTENTION_ACCURACY, 0.0) >= 1.0
+                : metrics.getOrDefault(Metrics.FALSE_ABSTENTION, 0.0) >= 1.0);
+        FailureClassifier.Diagnosis diagnosis = FailureClassifier.classify(new FailureClassifier.Input(q.qtype(), traces, full, abstained,
+                metrics.get(Metrics.CORRECTNESS), metrics.get(Metrics.FAITHFULNESS), q.flags().contains("AMBIGUOUS") || q.flags().contains("LOW_ANSWERABILITY")));
+        failure = diagnosis == null ? null : diagnosis.stage().name();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("spans", spanDetail);
+        if (diagnosis != null) {
+            detail.put("stage", diagnosis.stage());
+            if (diagnosis.sub() != null) detail.put("sub", diagnosis.sub());
+            if (diagnosis.lostAt() != null) detail.put("lostAt", diagnosis.lostAt());
+        }
+        String detailJson = json.writeValueAsString(detail);
+
         String metricsJson = json.writeValueAsString(metrics), retrievedJson = json.writeValueAsString(retrieved), contextJson = json.writeValueAsString(finalContext);
         String claimsJson = claims == null ? null : json.writeValueAsString(claims);
         String fail = failure, ans = answer;
@@ -192,12 +205,54 @@ public class RunExperimentHandler implements JobHandler {
         UUID trace = traceId;
         tx.workspace(ws, null, j -> {
             int inserted = j.update("INSERT INTO run_results (workspace_id, run_id, question_id, retrieved, final_context, answer, claims, metrics, failure_stage, latency_ms, "
-                            + "tokens_in, tokens_out, cost_usd, trace_id) VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?) "
+                            + "tokens_in, tokens_out, cost_usd, trace_id, failure_detail) VALUES (?, ?, ?, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?, ?, ?, ?, ?, ?, ?::jsonb) "
                             + "ON CONFLICT (run_id, question_id) DO NOTHING",
-                    ws, runId, q.id(), retrievedJson, contextJson, ans, claimsJson, metricsJson, fail, (int) latency, tin, tout, usd, trace);
+                    ws, runId, q.id(), retrievedJson, contextJson, ans, claimsJson, metricsJson, fail, (int) latency, tin, tout, usd, trace, detailJson);
             if (inserted > 0) j.update("UPDATE runs SET samples_done = samples_done + 1 WHERE id = ?", runId);
             return null;
         });
+    }
+
+    /**
+     * Follows one gold span through the pipeline. The chunk-size lookup (does any single chunk of this chunking cover the span?) is only made
+     * for a span that did not reach the prompt, since only then does it decide the label.
+     */
+    private void traceSpan(UUID ws, RetrievalPipeline.Result result, Gold g, List<FailureClassifier.SpanTrace> traces, List<Map<String, Object>> detail) {
+        Integer fusedRank = firstHit(result.candidates(), g), finalRank = firstHit(result.reranked(), g);
+        boolean inRanked = firstHit(result.ranked(), g) != null;
+        boolean inContext = result.context().included().stream().anyMatch(c -> RetrievalMetrics.hits(ref(c.chunk()), g));
+        Double cover = null;
+        String dropped = null;
+        if (!inContext) {
+            cover = result.chunkingId() == null ? 0.0 : bestCover(ws, result.chunkingId(), g);
+            dropped = result.context().dropped().stream().filter(d -> RetrievalMetrics.hits(ref(d.chunk()), g)).map(d -> d.reason().name()).findFirst().orElse(null);
+        }
+        traces.add(new FailureClassifier.SpanTrace(cover, finalRank != null, inRanked, inContext));
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (cover != null) m.put("bestCover", Math.round(cover * 1000) / 1000.0);
+        if (fusedRank != null) m.put("fusedRank", fusedRank);
+        if (finalRank != null) m.put("finalRank", finalRank);
+        m.put("inRanked", inRanked);
+        m.put("inContext", inContext);
+        if (dropped != null) m.put("dropped", dropped);
+        detail.add(m);
+    }
+
+    /** 1-based position of the first chunk that hits the span, or null. */
+    private static Integer firstHit(List<Candidate> list, Gold g) {
+        for (int i = 0; i < list.size(); i++) if (RetrievalMetrics.hits(ref(list.get(i)), g)) return i + 1;
+        return null;
+    }
+
+    /** The largest share of the span that one chunk of the chunking covers. */
+    private double bestCover(UUID ws, UUID chunkingId, Gold g) {
+        int length = g.end() - g.start();
+        if (length <= 0) return 0;
+        Integer overlap = tx.workspace(ws, null, j -> j.queryForObject(
+                "SELECT coalesce(max(least(char_end, ?) - greatest(char_start, ?)), 0) FROM chunks "
+                        + "WHERE chunking_id = ? AND document_id = ? AND NOT superseded AND char_end > ? AND char_start < ?",
+                Integer.class, g.end(), g.start(), chunkingId, g.documentId(), g.start(), g.end()));
+        return Math.min(1.0, Math.max(0, overlap == null ? 0 : overlap) / (double) length);
     }
 
     /** Aggregates a finished run into run_metrics and marks it DONE. Rewritten from scratch each time, so a resumed run never doubles rows. */

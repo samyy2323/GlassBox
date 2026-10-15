@@ -78,14 +78,14 @@ public class RetrievalPipeline {
         Reranker reranker = rerankers.get(config.reranker());
         List<Candidate> pool = candidates.subList(0, Math.min(config.rerankCandidates(), candidates.size()));
         List<Candidate> reranked = reranker.rerank(query, pool, pool.size());
-        List<Candidate> ranked = reranked.subList(0, Math.min(config.topN(), reranked.size()));
-        spans.add(span("rerank", t, Map.of("reranker", config.reranker(), "in", pool.size(), "out", ranked.size())));
+        spans.add(span("rerank", t, Map.of("reranker", config.reranker(), "in", pool.size(), "out", Math.min(config.topN(), reranked.size()))));
 
-        if (config.chunking() != null && config.chunking().parentChild()) { // the prompt gets the parent of each matched child
+        if (config.chunking() != null && config.chunking().parentChild()) { // the matched children stand for their parents from here on
             t = System.nanoTime();
-            ranked = parents.expand(workspaceId, ranked);
-            spans.add(span("parent_expansion", t, Map.of("out", ranked.size())));
+            reranked = parents.expand(workspaceId, reranked);
+            spans.add(span("parent_expansion", t, Map.of("out", reranked.size())));
         }
+        List<Candidate> ranked = reranked.subList(0, Math.min(config.topN(), reranked.size()));
 
         t = System.nanoTime();
         Context context = contextBuilder.build(ranked, config.tokenBudget());
