@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ChevronLeft, Loader2, ScanSearch, XCircle } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, Loader2, ScanSearch, Share2, XCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { ForestPlot } from '../components/ForestPlot'
 import { Diagnosis } from '../components/Diagnosis'
 import { Heatmap } from '../components/Heatmap'
+import { ShareDialog } from '../components/ShareDialog'
 import { JudgeBadge } from '../components/JudgeBadge'
 import { api, type ComparisonRow, type Experiment, type Flip, type RunSummary } from '../lib/api'
 import {
@@ -224,6 +225,7 @@ export default function ExperimentDetail() {
   const cancel = useMutation({ mutationFn: () => api.cancelExperiment(id), onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.experiment(id) }) })
   const [forestMetric, setForestMetric] = useState('')
   const [grouped, setGrouped] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const e = exp.data
   const canEdit = current != null && current.role !== 'VIEWER'
 
@@ -239,12 +241,14 @@ export default function ExperimentDetail() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
+        {sharing && <ShareDialog kind="EXPERIMENT" refId={e.id} onClose={() => setSharing(false)} />}
         <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/experiments" className="btn-ghost !px-2" aria-label="All experiments"><ChevronLeft className="h-4 w-4" /></Link>
             <h1 className="min-w-0 truncate text-[1.4rem] font-semibold tracking-tight">{e.name}</h1>
             <ExperimentStatusChip status={e.status} />
             <span className="chip">{e.mode === 'FULL' ? 'Full answers' : 'Retrieval only'}</span>
+            {(e.status === 'DONE' || e.status === 'ABORTED') && <button className="btn-ghost ml-auto" onClick={() => setSharing(true)}><Share2 className="h-4 w-4" /> Share</button>}
             {isActive(e.status) && canEdit && (
               <button className="btn-ghost ml-auto" onClick={() => cancel.mutate()} disabled={cancel.isPending}>{cancel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancel</button>
             )}

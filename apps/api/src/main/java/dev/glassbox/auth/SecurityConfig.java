@@ -43,6 +43,8 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
                 .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health/**", "/actuator/prometheus").permitAll()
+                // a share link: the token in the path is the credential, and the endpoint reads one frozen snapshot (see V18)
+                .requestMatchers(HttpMethod.GET, "/api/public/reports/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll())
             .addFilterBefore(new AuthenticationFilter(jwt, tx), UsernamePasswordAuthenticationFilter.class);

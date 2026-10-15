@@ -18,6 +18,7 @@ import AutotuneNew from './pages/AutotuneNew'
 import Autotunes from './pages/Autotunes'
 import Feedback from './pages/Feedback'
 import Login from './pages/Login'
+import PublicReport from './pages/PublicReport'
 import TestSetReview from './pages/TestSetReview'
 import TestSets from './pages/TestSets'
 import XRay from './pages/XRay'
@@ -50,6 +51,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/r/:token" element={<PublicReport />} />
             <Route element={<Protected />}>
               <Route path="/chat" element={<Chat />} />
               <Route path="/chat/:traceId" element={<Chat />} />

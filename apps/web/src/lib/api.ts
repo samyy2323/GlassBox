@@ -612,6 +612,28 @@ export interface DocumentImpact {
   failToPass: number
   diff?: DocumentDiff
 }
+export interface ReportMeta {
+  id: string
+  kind: 'EXPERIMENT' | 'AUTOTUNE'
+  refId: string
+  title: string
+  redacted: boolean
+  createdAt: string
+  activeLinks: number
+}
+export interface ReportLink {
+  id: string
+  expiresAt: string
+  revokedAt?: string
+  createdAt: string
+  active: boolean
+}
+export interface CreatedReportLink {
+  id: string
+  token: string
+  expiresAt: string
+  path: string
+}
 export interface ModelPrice {
   model: string
   promptUsdPerMillion: number
@@ -787,6 +809,16 @@ export const api = {
   dismissFeedback: (id: string) => request<FeedbackItem>(`/api/feedback/${id}/dismiss`, { method: 'POST' }),
   documentVersions: (id: string) => request<DocumentVersion[]>(`/api/documents/${id}/versions`),
   documentImpact: (id: string, version: number) => request<DocumentImpact>(`/api/documents/${id}/versions/${version}/impact`),
+  createReport: (kind: 'EXPERIMENT' | 'AUTOTUNE', refId: string, redact: boolean) =>
+    request<ReportMeta>('/api/reports', { method: 'POST', body: JSON.stringify({ kind, refId, redact }) }),
+  reportLinks: (id: string) => request<ReportLink[]>(`/api/reports/${id}/links`),
+  createReportLink: (id: string, days: number) => request<CreatedReportLink>(`/api/reports/${id}/links`, { method: 'POST', body: JSON.stringify({ days }) }),
+  revokeReportLink: (id: string, linkId: string) => request<void>(`/api/reports/${id}/links/${linkId}`, { method: 'DELETE' }),
+  reportPdf: async (id: string): Promise<Blob> => {
+    const res = await authedFetch(`/api/reports/${id}/pdf`, {})
+    if (!res.ok) throw await toError(res)
+    return res.blob()
+  },
   budget: () => request<BudgetOverview>('/api/budget'),
   setBudget: (b: BudgetLimits) => request<BudgetLimits>('/api/budget', { method: 'PUT', body: JSON.stringify(b) }),
   setPrice: (p: ModelPrice) => request<ModelPrice[]>('/api/budget/prices', { method: 'PUT', body: JSON.stringify(p) }),

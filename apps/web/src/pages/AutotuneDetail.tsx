@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronLeft, Loader2, Rocket, XCircle } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, Loader2, Rocket, Share2, XCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { ParetoPlot } from '../components/ParetoPlot'
+import { ShareDialog } from '../components/ShareDialog'
 import { api, ApiError, type Autotune, type AutotuneCandidate } from '../lib/api'
 import { describeConfig, effectGroups, isActive, OBJECTIVE_LABEL, shrinkageText, STEPS, stepStates, type PlotPoint } from '../lib/autotune'
 import { formatDelta } from '../lib/experiments'
@@ -73,6 +74,7 @@ export default function AutotuneDetail() {
   const cancel = useMutation({ mutationFn: () => api.cancelAutotune(id), onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.autotune(id) }) })
   const promote = useMutation({ mutationFn: () => api.promoteAutotune(id) })
   const [showAll, setShowAll] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const a = run.data
   const canEdit = current != null && current.role !== 'VIEWER'
   const isOwner = current?.role === 'OWNER'
@@ -90,12 +92,14 @@ export default function AutotuneDetail() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
+        {sharing && <ShareDialog kind="AUTOTUNE" refId={a.id} onClose={() => setSharing(false)} />}
         <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/autotune" className="btn-ghost !px-2" aria-label="All AutoTune runs"><ChevronLeft className="h-4 w-4" /></Link>
             <h1 className="min-w-0 truncate text-[1.4rem] font-semibold tracking-tight">{a.name}</h1>
             <ExperimentStatusChip status={a.status} />
             <span className="chip">{OBJECTIVE_LABEL[a.objective].title}</span>
+            {a.status === 'DONE' && <button className="btn-ghost ml-auto" onClick={() => setSharing(true)}><Share2 className="h-4 w-4" /> Share</button>}
             {isActive(a.status) && canEdit && <button className="btn-ghost ml-auto" onClick={() => cancel.mutate()} disabled={cancel.isPending}>{cancel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancel</button>}
           </div>
           <p className="text-xs text-muted">
