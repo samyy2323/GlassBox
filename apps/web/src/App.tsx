@@ -7,6 +7,7 @@ import { UploadsProvider } from './lib/uploads'
 import { WorkspaceProvider } from './lib/workspace'
 import Calibration from './pages/Calibration'
 import Chat from './pages/Chat'
+import DocumentChanges from './pages/DocumentChanges'
 import Documents from './pages/Documents'
 import ExperimentDetail from './pages/ExperimentDetail'
 import ExperimentNew from './pages/ExperimentNew'
@@ -57,6 +58,7 @@ export default function App() {
               <Route path="/testsets/:id/review" element={<TestSetReview />} />
               <Route path="/experiments" element={<Experiments />} />
               <Route path="/budget" element={<Budget />} />
+              <Route path="/documents/:id/changes" element={<DocumentChanges />} />
               <Route path="/feedback" element={<Feedback />} />
               <Route path="/autotune" element={<Autotunes />} />
               <Route path="/autotune/new" element={<AutotuneNew />} />

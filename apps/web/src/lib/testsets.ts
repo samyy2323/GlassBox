@@ -17,6 +17,7 @@ export const FLAG_LABEL: Record<QualityFlag, { label: string; hint: string }> = 
   AMBIGUOUS: { label: 'Not self-contained', hint: 'The question only makes sense next to the source ("the document says...").' },
   LOW_ANSWERABILITY: { label: 'Hard to answer', hint: 'A model given only the evidence did not reproduce the expected answer.' },
   DUPLICATE: { label: 'Duplicate', hint: 'Very similar to an earlier question in this set.' },
+  STALE: { label: 'Evidence moved', hint: 'The document was replaced and this question\'s evidence could not be found in the new text. Check it, or mark the new passage.' },
   ANSWERABLE_RISK: { label: 'May be answerable', hint: 'Meant to be unanswerable, but a model answered it from what the search found. Check the corpus before you accept it.' },
 }
 

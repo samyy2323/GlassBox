@@ -164,7 +164,7 @@ export interface TracePage {
 export type QuestionType = 'FACTUAL' | 'NUMERIC' | 'MULTI_HOP' | 'COMPARISON' | 'UNANSWERABLE'
 export type ReviewStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EDITED'
 export type TestSetStatus = 'GENERATING' | 'DRAFT' | 'FINAL' | 'FAILED'
-export type QualityFlag = 'COPY_RISK' | 'AMBIGUOUS' | 'LOW_ANSWERABILITY' | 'DUPLICATE' | 'ANSWERABLE_RISK'
+export type QualityFlag = 'COPY_RISK' | 'AMBIGUOUS' | 'LOW_ANSWERABILITY' | 'DUPLICATE' | 'ANSWERABLE_RISK' | 'STALE'
 
 export interface TestSetStats {
   total: number
@@ -583,6 +583,35 @@ export interface FeedbackSummary {
   questionsFromFeedback: number
   questionsTotal: number
 }
+export interface DocumentVersion {
+  version: number
+  contentHash: string
+  createdAt: string
+  current: boolean
+  characters: number
+}
+export interface DocumentDiff {
+  from: number
+  to: number
+  summary: { same: number; added: number; removed: number }
+  ops: { kind: 'SAME' | 'ADDED' | 'REMOVED'; text: string }[]
+}
+export interface DocumentImpact {
+  version: number
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'NO_QUESTIONS' | 'SKIPPED' | 'FAILED'
+  note?: string
+  testsetId?: string
+  testsetVersion?: number
+  experimentId?: string
+  experimentStatus?: string
+  relocated: number
+  stale: number
+  staleQuestions: { questionId: string; question: string }[]
+  verdict?: { before: number; after: number; delta: number; ciLow: number; ciHigh: number; pAdjusted: number; text: string; questions: number }
+  passToFail: { questionId: string; question: string; failureStage?: string }[]
+  failToPass: number
+  diff?: DocumentDiff
+}
 export interface ModelPrice {
   model: string
   promptUsdPerMillion: number
@@ -756,6 +785,8 @@ export const api = {
   convertFeedback: (id: string, body: { testsetId: string; expectedAnswer?: string; qtype?: string; spans: SpanInput[] }) =>
     request<{ item: FeedbackItem; testsetId: string; newVersion: boolean }>(`/api/feedback/${id}/convert`, { method: 'POST', body: JSON.stringify(body) }),
   dismissFeedback: (id: string) => request<FeedbackItem>(`/api/feedback/${id}/dismiss`, { method: 'POST' }),
+  documentVersions: (id: string) => request<DocumentVersion[]>(`/api/documents/${id}/versions`),
+  documentImpact: (id: string, version: number) => request<DocumentImpact>(`/api/documents/${id}/versions/${version}/impact`),
   budget: () => request<BudgetOverview>('/api/budget'),
   setBudget: (b: BudgetLimits) => request<BudgetLimits>('/api/budget', { method: 'PUT', body: JSON.stringify(b) }),
   setPrice: (p: ModelPrice) => request<ModelPrice[]>('/api/budget/prices', { method: 'PUT', body: JSON.stringify(p) }),

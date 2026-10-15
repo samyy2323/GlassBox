@@ -29,7 +29,7 @@ function DocCard({ doc, index, canEdit, onOpen, onDelete, busy }: { doc: Documen
             <button type="button" onClick={onOpen} disabled={!readable} className="block w-full truncate text-left text-[0.95rem] font-semibold hover:underline disabled:no-underline" title={doc.title}>
               {doc.title}
             </button>
-            <p className="text-xs text-muted">{f.label} · {formatSize(doc.sizeBytes)} · v{doc.version}</p>
+            <p className="text-xs text-muted">{f.label} · {formatSize(doc.sizeBytes)} · v{doc.version}{doc.version > 1 && <> · <Link to={`/documents/${doc.id}/changes`} className="font-medium text-accent underline-offset-4 hover:underline">changes</Link></>}</p>
           </div>
           {canEdit && (
             <button

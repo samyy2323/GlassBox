@@ -3,7 +3,9 @@ package dev.glassbox.ingest;
 import dev.glassbox.chunking.Chunker;
 import dev.glassbox.embed.EmbeddingProviders;
 import dev.glassbox.embed.EmbeddingService;
+import dev.glassbox.documents.ChangeImpactHandler;
 import dev.glassbox.jobs.Job;
+import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.jobs.JobHandler;
 import dev.glassbox.parse.ParsedDocument;
 import dev.glassbox.parse.UnsupportedDocumentException;
@@ -30,11 +32,16 @@ public class IngestHandler implements JobHandler {
     private final DocumentStorage storage;
     private final DocumentIndexer indexer;
     private final WorkspaceDefaults workspaceDefaults;
+    private final JobQueue jobs;
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper;
     private final int chunkSize;
 
     public IngestHandler(Tx tx, EmbeddingService embeddings, EmbeddingProviders providers, DocumentStorage storage, DocumentIndexer indexer,
-                         WorkspaceDefaults workspaceDefaults, @Value("${glassbox.ingest.chunk-size}") int chunkSize) {
+                         WorkspaceDefaults workspaceDefaults, JobQueue jobs, com.fasterxml.jackson.databind.ObjectMapper mapper,
+                         @Value("${glassbox.ingest.chunk-size}") int chunkSize) {
         this.workspaceDefaults = workspaceDefaults;
+        this.jobs = jobs;
+        this.mapper = mapper;
         this.tx = tx;
         this.embeddings = embeddings;
         this.providers = providers;
@@ -106,6 +113,8 @@ public class IngestHandler implements JobHandler {
         tx.workspace(ws, null, j -> {
             j.update("UPDATE documents SET status = 'READY' WHERE id = ? AND version = ?", docId, version);
             DocumentEvents.statusChanged(j, ws, docId, "READY");
+            // a replaced document: work out what the change did to the test sets and to the measured quality (SPEC 11)
+            if (version > 1) jobs.enqueue(j, ws, ChangeImpactHandler.TYPE, mapper.createObjectNode().put("documentId", docId.toString()).put("version", version), "impact:" + docId + ":" + version);
             return null;
         });
     }
