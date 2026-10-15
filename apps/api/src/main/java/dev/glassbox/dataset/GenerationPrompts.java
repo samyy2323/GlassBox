@@ -14,6 +14,7 @@ public final class GenerationPrompts {
             Write ONE question that can be answered from the passages, and its short correct answer.
             Rules:
             - The question must make sense on its own, to someone who has not seen the passages. Name the specific thing it is about.
+            - If the passage names a place, site, product, organisation or person, the question must name it too, because other documents may say similar things about other places.
             - Never write "the passage", "the document", "the text" or "the author" in the question.
             - Do not copy a whole sentence from the passage into the question; ask about a fact in it.
             - The answer must be stated in the passages, in at most two sentences.

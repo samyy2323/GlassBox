@@ -23,7 +23,12 @@ CORPUS = sorted((pathlib.Path(__file__).parent / "corpus-p4").glob("*.md"))
 CREDS = pathlib.Path.home() / ".glassbox-autotune-account.json"
 
 
-def call(base, method, path, token=None, workspace=None, body=None):
+SESSION = {}  # email and password of the throwaway account, so a long wait can sign in again when the access token expires
+
+
+def call(base, method, path, token=None, workspace=None, body=None, _retry=True):
+    if token and SESSION.get("token") and token != SESSION["token"]:
+        token = SESSION["token"]  # a newer one was issued by an earlier retry
     headers = {"Content-Type": "application/json"} if body is not None else {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -35,12 +40,18 @@ def call(base, method, path, token=None, workspace=None, body=None):
             raw = res.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as e:
+        if e.code == 401 and token and _retry and SESSION.get("email"):
+            auth = call(base, "POST", "/api/auth/login", body={"email": SESSION["email"], "password": SESSION["password"]}, _retry=False)
+            SESSION["token"] = auth["accessToken"]
+            return call(base, method, path, SESSION["token"], workspace, body, _retry=False)
         sys.exit(f"{method} {path} failed: HTTP {e.code} {e.read().decode()[:400]}")
 
 
 def login(base, creds):
     c = json.loads(pathlib.Path(creds).read_text())
+    SESSION.update(email=c["email"], password=c["password"])
     auth = call(base, "POST", "/api/auth/login", body={"email": c["email"], "password": c["password"]})
+    SESSION["token"] = auth["accessToken"]
     return auth["accessToken"], c["workspace"], c
 
 
@@ -49,6 +60,10 @@ def pct(v):
 
 
 def prepare(args):
+    if args.resume:  # an earlier run stopped while the test set was still generating: pick it up there
+        token, workspace, creds = login(args.base, args.creds)
+        started = time.time()
+        return finish_prepare(args, token, workspace, creds, args.resume, started)
     if not CORPUS:
         sys.exit("run benchmarks/make_corpus.py first")
     email = f"autotune-{secrets.token_hex(4)}@example.com"
@@ -58,6 +73,7 @@ def prepare(args):
     workspace = call(args.base, "GET", "/api/workspaces", token)[0]["id"]
     creds = {"email": email, "password": password, "workspace": workspace}
     pathlib.Path(args.creds).write_text(json.dumps(creds))
+    SESSION.update(email=email, password=password, token=token)
     print(f"account created; login saved to {args.creds}")
 
     for doc in CORPUS:
@@ -79,7 +95,11 @@ def prepare(args):
     mix = {"FACTUAL": 45, "NUMERIC": 20, "MULTI_HOP": 10, "COMPARISON": 15, "UNANSWERABLE": 10}
     made = call(args.base, "POST", "/api/testsets/generate", token, workspace, {"name": args.name, "count": args.count, "mix": mix, "seed": args.seed})
     tid = made["testset"]["id"]
-    print(f"generation started: {args.count} questions, about {made['estimatedLlmCalls']} model calls")
+    print(f"generation started: {args.count} questions, about {made['estimatedLlmCalls']} model calls ({tid})")
+    finish_prepare(args, token, workspace, creds, tid, started)
+
+
+def finish_prepare(args, token, workspace, creds, tid, started):
     last = -1
     while True:
         t = call(args.base, "GET", f"/api/testsets/{tid}", token, workspace)
@@ -97,16 +117,50 @@ def prepare(args):
     print("by type:", s["byType"], "| by flag:", s["byFlag"])
 
     items = call(args.base, "GET", f"/api/testsets/{tid}/questions?limit=200", token, workspace)["items"]
+    creds["testset"] = review(args, token, workspace, tid, items)
+    pathlib.Path(args.creds).write_text(json.dumps(creds))
+
+
+SITE_NAMES = [p.stem.split("-", 1)[1].replace("-", " ") for p in CORPUS]
+
+
+def keep(q):
+    """The review rule. With twelve similar handbooks a question that does not name its site is ambiguous, whatever the 3B checker says, and a
+    question that does name it is self-contained even when the checker said otherwise. A copy-risk flag only means the keyword search will find it
+    easily, which is a property of the question, not a defect. A duplicate, a hard-to-answer question or an unanswerable one that may be answerable
+    is dropped."""
+    flags = set(q["flags"])
+    if flags - {"AMBIGUOUS", "COPY_RISK"}:
+        return False
+    if q["qtype"] == "UNANSWERABLE":
+        return not flags or "AMBIGUOUS" in flags and any(n in q["question"].lower() for n in SITE_NAMES)
+    return any(n in q["question"].lower() for n in SITE_NAMES) or not flags
+
+
+def review(args, token, workspace, tid, items):
+    """Reviews a draft by rule and finalizes it. A final version cannot change, so an already final set is first copied to a new version."""
+    t = call(args.base, "GET", f"/api/testsets/{tid}", token, workspace)
+    if t["status"] == "FINAL":
+        tid = call(args.base, "POST", f"/api/testsets/{tid}/versions", token, workspace)["id"]
+        items = call(args.base, "GET", f"/api/testsets/{tid}/questions?limit=200", token, workspace)["items"]
     accepted = rejected = 0
     for q in items:
-        status = "ACCEPTED" if not q["flags"] else "REJECTED"
+        status = "ACCEPTED" if keep(q) else "REJECTED"
         call(args.base, "PATCH", f"/api/questions/{q['id']}", token, workspace, {"reviewStatus": status})
         accepted += status == "ACCEPTED"
         rejected += status == "REJECTED"
     final = call(args.base, "POST", f"/api/testsets/{tid}/finalize", token, workspace, {"allowPending": False})
-    print(f"review by rule: {accepted} accepted, {rejected} rejected (flagged); finalized as version {final['version']}")
-    print("accepted by type:", {t: sum(1 for q in items if q["qtype"] == t and not q["flags"]) for t in sorted({q['qtype'] for q in items})})
-    creds["testset"] = tid
+    kept = [q for q in items if keep(q)]
+    print(f"review by rule: {accepted} accepted, {rejected} rejected; finalized as version {final['version']} ({tid})")
+    print("accepted by type:", {ty: sum(1 for q in kept if q["qtype"] == ty) for ty in sorted({q['qtype'] for q in items})})
+    return tid
+
+
+def rereview(args):
+    token, workspace, creds = login(args.base, args.creds)
+    tid = creds["testset"]
+    items = call(args.base, "GET", f"/api/testsets/{tid}/questions?limit=200", token, workspace)["items"]
+    creds["testset"] = review(args, token, workspace, tid, items)
     pathlib.Path(args.creds).write_text(json.dumps(creds))
 
 
@@ -190,7 +244,7 @@ def tune(args):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")  # configuration labels contain a middle dot
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=["prepare", "tune"])
+    ap.add_argument("phase", choices=["prepare", "tune", "review"])
     ap.add_argument("--base", default="http://localhost:8080")
     ap.add_argument("--creds", default=str(CREDS))
     ap.add_argument("--count", type=int, default=120)
@@ -201,10 +255,11 @@ def main():
     ap.add_argument("--finalists", type=int, default=5)
     ap.add_argument("--full", type=int, default=0, help="also measure full answers for the finalists, on this many questions per part")
     ap.add_argument("--cap-minutes", type=int, default=120)
+    ap.add_argument("--resume", default=None, help="prepare: the id of a test set that is still generating, to wait for it and finish the preparation")
     args = ap.parse_args()
     if args.name is None:
         args.name = "Site handbooks" if args.phase == "prepare" else ("AutoTune with full answers" if args.full else "AutoTune")
-    {"prepare": prepare, "tune": tune}[args.phase](args)
+    {"prepare": prepare, "tune": tune, "review": rereview}[args.phase](args)
 
 
 if __name__ == "__main__":
