@@ -11,6 +11,7 @@ import dev.glassbox.trace.TraceModel.Status;
 import dev.glassbox.trace.TraceService;
 import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.RetrievalPipeline;
+import dev.glassbox.retrieval.WorkspaceDefaults;
 import dev.glassbox.retrieval.Span;
 import dev.glassbox.tenancy.Tx;
 import java.util.ArrayList;
@@ -42,6 +43,8 @@ public class ChatService {
 
     public record Options(Reranker.Type reranker, int topN, int tokenBudget) {}
 
+    private final WorkspaceDefaults workspaceDefaults;
+
     private final RetrievalPipeline pipeline;
     private final PromptBuilder prompts;
     private final LlmProvider llm;
@@ -58,7 +61,8 @@ public class ChatService {
                        AnswerSanitizer sanitizer, Tx tx, TraceService traces, TraceAssembler assembler,
                        @Value("${glassbox.embed.default-model}") String embeddingModel,
                        @Value("${glassbox.llm.temperature}") double temperature,
-                       @Value("${glassbox.llm.max-tokens}") int maxTokens) {
+                       @Value("${glassbox.llm.max-tokens}") int maxTokens, WorkspaceDefaults workspaceDefaults) {
+        this.workspaceDefaults = workspaceDefaults;
         this.pipeline = pipeline;
         this.prompts = prompts;
         this.llm = llm;
@@ -90,7 +94,7 @@ public class ChatService {
         StringBuilder answer = new StringBuilder();
         int promptTokens = 0;
         try {
-            PipelineConfig config = PipelineConfig.defaults(embeddingModel).withReranker(options.reranker())
+            PipelineConfig config = workspaceDefaults.promoted(workspaceId).orElseGet(() -> PipelineConfig.defaults(embeddingModel)).withReranker(options.reranker())
                     .withTopN(options.topN()).withTokenBudget(options.tokenBudget());
             result = pipeline.retrieve(workspaceId, question, config, record);
             titles = titles(workspaceId, result.candidates().stream().map(Candidate::documentId).distinct().toList());

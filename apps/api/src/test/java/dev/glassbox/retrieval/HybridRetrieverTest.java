@@ -36,14 +36,14 @@ class HybridRetrieverTest {
     /**
      * The plan assertions depend on table statistics: with the thousands of vectors other test classes leave behind in the shared database the
      * planner prefers the chunking btree index (an exact search) to HNSW, and the "post-filtered ANN" pitfall cannot be shown at all. So this class
-     * starts from empty chunk and embedding tables. Test classes do not run concurrently and each creates its own tenants.
+     * starts from empty chunk and embedding tables with no statistics. Test classes do not run concurrently and each creates its own tenants.
      */
     @org.junit.jupiter.api.BeforeAll
     static void startFromEmptyIndexTables() throws java.sql.SQLException {
-        try (var c = TestDb.ownerConnection(); var st = c.createStatement()) {
+        try (var c = TestDb.superuserConnection(); var st = c.createStatement()) {
             st.execute("TRUNCATE embeddings, chunks CASCADE");
-            st.execute("ANALYZE embeddings");
-            st.execute("ANALYZE chunks");
+            // ANALYZE on an empty table keeps the statistics it had, so the planner would go on believing what the big table taught it
+            st.execute("DELETE FROM pg_statistic WHERE starelid IN ('embeddings'::regclass, 'chunks'::regclass)");
         }
     }
 

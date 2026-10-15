@@ -117,6 +117,9 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
             // P4 tables
             exec(c, "INSERT INTO workspace_settings (workspace_id, default_pipeline) VALUES (?, ?::jsonb)", ws, "{\"c\":\"" + canary + "\"}");
+            UUID tune = UUID.randomUUID();
+            exec(c, "INSERT INTO autotunes (id, workspace_id, testset_id, name, objective) VALUES (?, ?, ?, ?, 'BEST_QUALITY')", tune, ws, set, canary);
+            exec(c, "INSERT INTO autotune_candidates (workspace_id, autotune_id, stage, key, label, config) VALUES (?, ?, 'STAGE1', ?, ?, ?::jsonb)", ws, tune, "k-" + canary, canary, "{\"c\":\"" + canary + "\"}");
             return null;
         });
     }

@@ -165,6 +165,12 @@ public class ExperimentService {
         }
     }
 
+    /** The stored row for a configuration, created on first use; the same configuration always maps to the same row. */
+    public UUID upsertConfig(JdbcTemplate j, UUID ws, PipelineConfig config) {
+        return j.queryForObject("INSERT INTO pipeline_configs (workspace_id, config, config_hash) VALUES (?, ?::jsonb, ?) "
+                + "ON CONFLICT (workspace_id, config_hash) DO UPDATE SET config = EXCLUDED.config RETURNING id", UUID.class, ws, write(config), hash(config));
+    }
+
     /** RETRIEVAL (default) or FULL. */
     private static String parseMode(String mode) {
         if (mode == null || mode.isBlank()) return "RETRIEVAL";
@@ -273,7 +279,7 @@ public class ExperimentService {
     public List<ExperimentView> list(Principal p, UUID ws) {
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.VIEWER);
-            List<UUID> ids = j.queryForList("SELECT id FROM experiments ORDER BY created_at DESC, id DESC LIMIT 100", UUID.class);
+            List<UUID> ids = j.queryForList("SELECT id FROM experiments WHERE kind <> 'AUTOTUNE' ORDER BY created_at DESC, id DESC LIMIT 100", UUID.class);
             List<ExperimentView> out = new ArrayList<>();
             for (UUID id : ids) out.add(view(j, ws, id, false));
             return out;

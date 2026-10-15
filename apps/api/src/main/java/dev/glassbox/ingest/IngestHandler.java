@@ -7,6 +7,7 @@ import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
 import dev.glassbox.parse.ParsedDocument;
 import dev.glassbox.parse.UnsupportedDocumentException;
+import dev.glassbox.retrieval.WorkspaceDefaults;
 import dev.glassbox.tenancy.Tx;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -28,10 +29,12 @@ public class IngestHandler implements JobHandler {
     private final EmbeddingProviders providers;
     private final DocumentStorage storage;
     private final DocumentIndexer indexer;
+    private final WorkspaceDefaults workspaceDefaults;
     private final int chunkSize;
 
     public IngestHandler(Tx tx, EmbeddingService embeddings, EmbeddingProviders providers, DocumentStorage storage, DocumentIndexer indexer,
-                         @Value("${glassbox.ingest.chunk-size}") int chunkSize) {
+                         WorkspaceDefaults workspaceDefaults, @Value("${glassbox.ingest.chunk-size}") int chunkSize) {
+        this.workspaceDefaults = workspaceDefaults;
         this.tx = tx;
         this.embeddings = embeddings;
         this.providers = providers;
@@ -84,6 +87,20 @@ public class IngestHandler implements JobHandler {
         // 4. Embed (idempotent; reuses vectors of identical text). A provider outage fails the job, which retries.
         var embedded = embeddings.embedChunks(ws, target.versionId(), chunkingId, providers.defaultModel());
         log.info("ingest {}: {} chunks, {} reused, {} texts embedded", job.id(), embedded.chunks(), embedded.reused(), embedded.textsEmbedded());
+
+        // 4b. A workspace that promoted another chunking or model from AutoTune searches that, so new uploads get it too before they count as READY.
+        workspaceDefaults.promoted(ws).ifPresent(p -> {
+            boolean otherChunking = p.chunking() != null, otherModel = !p.retrieval().model().equals(providers.defaultModel());
+            if (!otherChunking && !otherModel) return;
+            try {
+                UUID id = otherChunking ? indexer.persist(ws, docId, target.versionId(), parsed, p.chunking().chunker()) : chunkingId;
+                embeddings.embedChunks(ws, target.versionId(), id, p.retrieval().model());
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
 
         // 5. Done.
         tx.workspace(ws, null, j -> {

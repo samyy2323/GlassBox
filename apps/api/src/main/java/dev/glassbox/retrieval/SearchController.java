@@ -25,10 +25,12 @@ public class SearchController {
 
     private final RetrievalPipeline pipeline;
     private final WorkspaceService workspaces;
+    private final WorkspaceDefaults workspaceDefaults;
     private final String defaultModel;
 
-    public SearchController(RetrievalPipeline pipeline, WorkspaceService workspaces,
+    public SearchController(RetrievalPipeline pipeline, WorkspaceService workspaces, WorkspaceDefaults workspaceDefaults,
                             @Value("${glassbox.embed.default-model}") String defaultModel) {
+        this.workspaceDefaults = workspaceDefaults;
         this.pipeline = pipeline;
         this.workspaces = workspaces;
         this.defaultModel = defaultModel;
@@ -40,7 +42,7 @@ public class SearchController {
                                            @Valid @RequestBody SearchRequest body) {
         UUID ws = WorkspaceService.resolve(p, header);
         workspaces.authorize(p, ws, Role.VIEWER);
-        PipelineConfig config = PipelineConfig.defaults(defaultModel);
+        PipelineConfig config = workspaceDefaults.promoted(ws).orElseGet(() -> PipelineConfig.defaults(defaultModel));
         if (body.mode() != null) config = config.withMode(body.mode());
         if (body.reranker() != null) config = config.withReranker(body.reranker());
         if (body.topN() != null) config = config.withTopN(body.topN());

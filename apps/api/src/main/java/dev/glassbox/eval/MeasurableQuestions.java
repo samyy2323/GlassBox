@@ -107,6 +107,13 @@ public final class MeasurableQuestions {
         return out;
     }
 
+    /** All questions in the fixed, id-derived order that {@link #sample} draws its prefix from: a round of successive halving takes a longer prefix of the same order. */
+    public static List<Question> hashOrdered(List<Question> questions) {
+        List<Question> out = new ArrayList<>(questions);
+        out.sort(java.util.Comparator.comparingLong((Question q) -> mix(q.id())));
+        return out;
+    }
+
     private static long mix(UUID id) {
         long x = (id.getMostSignificantBits() ^ id.getLeastSignificantBits()) * 0x9E3779B97F4A7C15L;
         return x ^ (x >>> 29);

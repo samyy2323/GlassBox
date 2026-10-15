@@ -6,6 +6,8 @@ import dev.glassbox.auth.Principal;
 import dev.glassbox.common.ApiException;
 import dev.glassbox.ratelimit.RateLimiter;
 import dev.glassbox.rerank.Reranker;
+import dev.glassbox.retrieval.PipelineConfig;
+import dev.glassbox.retrieval.WorkspaceDefaults;
 import dev.glassbox.tenancy.Role;
 import dev.glassbox.workspace.WorkspaceService;
 import jakarta.validation.Valid;
@@ -39,6 +41,7 @@ public class ChatController {
     private static final long STREAM_TIMEOUT_MS = 5 * 60_000L;
 
     private final WorkspaceService workspaces;
+    private final WorkspaceDefaults workspaceDefaults;
     private final LlmGate gate;
     private final RateLimiter rateLimiter;
     private final ChatService chat;
@@ -52,7 +55,8 @@ public class ChatController {
                           ExecutorService chatExecutor, ObjectMapper json,
                           @Value("${glassbox.chat.reranker}") Reranker.Type defaultReranker,
                           @Value("${glassbox.chat.top-n}") int defaultTopN,
-                          @Value("${glassbox.chat.token-budget}") int tokenBudget) {
+                          @Value("${glassbox.chat.token-budget}") int tokenBudget, WorkspaceDefaults workspaceDefaults) {
+        this.workspaceDefaults = workspaceDefaults;
         this.workspaces = workspaces;
         this.gate = gate;
         this.rateLimiter = chatRateLimiter;
@@ -98,8 +102,9 @@ public class ChatController {
                 return cancelled.get();
             }
         };
-        ChatService.Options options = new ChatService.Options(body.reranker() != null ? body.reranker() : defaultReranker,
-                body.topN() != null ? body.topN() : defaultTopN, tokenBudget);
+        var promoted = workspaceDefaults.promoted(ws);
+        ChatService.Options options = new ChatService.Options(body.reranker() != null ? body.reranker() : promoted.map(PipelineConfig::reranker).orElse(defaultReranker),
+                body.topN() != null ? body.topN() : promoted.map(PipelineConfig::topN).orElse(defaultTopN), promoted.map(PipelineConfig::tokenBudget).orElse(tokenBudget));
         try {
             executor.submit(() -> {
                 try {
