@@ -61,7 +61,7 @@ public class TestSetService {
         if (mix != null) {
             for (var e : mix.entrySet()) {
                 if (!QuestionSampler.TYPES.contains(e.getKey())) {
-                    throw ApiException.badRequest("Question type " + e.getKey() + " cannot be generated yet. Available: " + QuestionSampler.TYPES);
+                    throw ApiException.badRequest("Question type " + e.getKey() + " cannot be generated. Available: " + QuestionSampler.TYPES);
                 }
                 if (e.getValue() == null || e.getValue() < 0) throw ApiException.badRequest("Type shares must be zero or more");
                 if (e.getValue() > 0) useMix.put(e.getKey(), e.getValue());

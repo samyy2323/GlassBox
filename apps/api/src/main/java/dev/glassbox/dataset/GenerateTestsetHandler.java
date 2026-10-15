@@ -12,6 +12,8 @@ import dev.glassbox.jobs.Job;
 import dev.glassbox.jobs.JobHandler;
 import dev.glassbox.jobs.JobQueue;
 import dev.glassbox.retrieval.ChunkingResolver;
+import dev.glassbox.retrieval.PipelineConfig;
+import dev.glassbox.retrieval.RetrievalPipeline;
 import dev.glassbox.tenancy.Tx;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,9 +50,11 @@ public class GenerateTestsetHandler implements JobHandler {
     private final EmbeddingProviders embedders;
     private final ChunkingResolver chunkings;
     private final JobQueue queue;
+    private final RetrievalPipeline pipeline;
 
     public GenerateTestsetHandler(Tx tx, ObjectMapper json, LlmProvider llm, LlmChecks checks, EmbeddingProviders embedders, ChunkingResolver chunkings,
-                                  JobQueue queue) {
+                                  JobQueue queue, RetrievalPipeline pipeline) {
+        this.pipeline = pipeline;
         this.tx = tx;
         this.json = json;
         this.llm = llm;
@@ -181,6 +185,7 @@ public class GenerateTestsetHandler implements JobHandler {
     /** Locates evidence, runs the quality checks and saves the question with the progress counters. */
     private boolean store(UUID ws, UUID setId, Sample s, QuestionJson.Parsed p, int at, EmbeddingProvider embedder,
                           List<float[]> earlier, Map<UUID, String> texts, Runnable alive) throws Exception {
+        if (s.type().equals(QuestionSampler.UNANSWERABLE)) return storeUnanswerable(ws, setId, s, p, at, embedder, earlier, alive);
         List<GoldSpan> spans = new ArrayList<>();
         List<String> evidence = new ArrayList<>();
         for (Chunk c : s.chunks()) {
@@ -237,6 +242,52 @@ public class GenerateTestsetHandler implements JobHandler {
         });
         return true;
     }
+
+    /**
+     * An UNANSWERABLE question has no gold evidence. It is confirmed by retrieval: the pipeline searches for it as a user would, and a model
+     * is asked to answer from what came back. A real answer there means the corpus may well answer it, so the question is flagged
+     * ANSWERABLE_RISK for the reviewer rather than silently kept or dropped.
+     */
+    private boolean storeUnanswerable(UUID ws, UUID setId, Sample s, QuestionJson.Parsed p, int at, EmbeddingProvider embedder,
+                                      List<float[]> earlier, Runnable alive) throws Exception {
+        List<String> flags = new ArrayList<>();
+        boolean ambiguous = QualityFilters.deictic(p.question());
+        if (!ambiguous && checks.enabled()) ambiguous = !checks.selfContained(p.question());
+        if (ambiguous) flags.add(QualityFilters.AMBIGUOUS);
+        alive.run();
+        if (checks.enabled()) {
+            var found = pipeline.retrieve(ws, p.question(), PipelineConfig.defaults(embedders.defaultModel()));
+            List<String> context = found.context().included().stream().map(c -> c.chunk().text()).toList();
+            alive.run();
+            if (!context.isEmpty() && !QualityFilters.saysNotStated(checks.answerFrom(p.question(), context))) flags.add(QualityFilters.ANSWERABLE_RISK);
+        }
+        float[] vector = embedder.embed(List.of(p.question())).get(0);
+        if (QualityFilters.duplicate(vector, earlier)) flags.add(QualityFilters.DUPLICATE);
+        earlier.add(vector);
+
+        String meta = json.writeValueAsString(Map.of("sampleIndex", s.index(), "sampleType", s.type(), "downgraded", false));
+        tx.workspace(ws, null, j -> {
+            int claimed = j.update("UPDATE testsets SET samples_done = ?, generated_count = generated_count + 1 WHERE id = ? AND samples_done = ? AND status = 'GENERATING'",
+                    at + 1, setId, at);
+            if (claimed == 0) throw new LostPlace();
+            j.update(con -> {
+                var ps = con.prepareStatement("INSERT INTO test_questions (workspace_id, testset_id, question, expected_answer, gold_chunk_spans, "
+                        + "qtype, origin, quality_flags, meta) VALUES (?, ?, ?, ?, '[]'::jsonb, 'UNANSWERABLE', 'SYNTHETIC', ?, ?::jsonb)");
+                ps.setObject(1, ws);
+                ps.setObject(2, setId);
+                ps.setString(3, p.question());
+                ps.setString(4, UNANSWERABLE_ANSWER);
+                ps.setArray(5, con.createArrayOf("text", flags.toArray()));
+                ps.setString(6, meta);
+                return ps;
+            });
+            return null;
+        });
+        return true;
+    }
+
+    /** What an unanswerable question's expected answer says, whatever the model wrote. */
+    static final String UNANSWERABLE_ANSWER = "Not stated in the documents.";
 
     private String versionText(UUID ws, UUID versionId) {
         return tx.workspace(ws, null, j -> j.query("SELECT normalized_text FROM document_versions WHERE id = ?", (rs, n) -> rs.getString(1), versionId)

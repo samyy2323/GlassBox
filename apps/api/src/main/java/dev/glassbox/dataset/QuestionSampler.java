@@ -23,9 +23,9 @@ import java.util.regex.Pattern;
  * (chunks, cross-document neighbours) are passed in.
  */
 public final class QuestionSampler {
-    public static final String FACTUAL = "FACTUAL", NUMERIC = "NUMERIC", MULTI_HOP = "MULTI_HOP", COMPARISON = "COMPARISON";
-    /** Types P2 can generate. UNANSWERABLE needs retrieval-based confirmation and arrives in P4. */
-    public static final List<String> TYPES = List.of(FACTUAL, NUMERIC, MULTI_HOP, COMPARISON);
+    public static final String FACTUAL = "FACTUAL", NUMERIC = "NUMERIC", MULTI_HOP = "MULTI_HOP", COMPARISON = "COMPARISON", UNANSWERABLE = "UNANSWERABLE";
+    /** Types that can be generated. An UNANSWERABLE sample is one passage the question is written around but must not be answered by. */
+    public static final List<String> TYPES = List.of(FACTUAL, NUMERIC, MULTI_HOP, COMPARISON, UNANSWERABLE);
 
     private static final Pattern DIGITS = Pattern.compile("\\d");
     private static final int MIN_WORDS = 25;

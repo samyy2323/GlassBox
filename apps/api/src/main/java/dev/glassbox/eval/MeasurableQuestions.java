@@ -18,15 +18,20 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * evidence still exists. A question whose document was replaced or deleted since the test set was written is "stale": its character
  * ranges no longer mean anything, so it is counted and reported but not run.
  */
-final class MeasurableQuestions {
-    record Question(UUID id, String qtype, String text, String expected, List<GoldSpan> spans) {
+public final class MeasurableQuestions {
+    public record Question(UUID id, String qtype, String text, String expected, List<GoldSpan> spans) {
         /** Questions from the same document resemble each other, so the first span's document is the cluster for the cluster bootstrap. Null for an unanswerable question. */
-        UUID clusterDocument() {
+        public UUID clusterDocument() {
             return spans.isEmpty() ? null : spans.get(0).documentId();
         }
     }
 
-    record Loaded(List<Question> questions, int stale, int withoutEvidence) {}
+    public record Loaded(List<Question> questions, int stale, int withoutEvidence) {
+        /** Only the questions with these ids, in test set order. */
+        public Loaded only(Set<UUID> ids) {
+            return new Loaded(questions.stream().filter(q -> ids.contains(q.id())).toList(), stale, withoutEvidence);
+        }
+    }
 
     private MeasurableQuestions() {}
 
@@ -35,7 +40,7 @@ final class MeasurableQuestions {
         return load(j, json, testsetId, false);
     }
 
-    static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable) {
+    public static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable) {
         return load(j, json, testsetId, includeUnanswerable, null);
     }
 
@@ -43,7 +48,7 @@ final class MeasurableQuestions {
      * @param limit when set and smaller than the number of questions, a fixed random sample of that size. The choice depends only on the question ids,
      *              so every run of an experiment, and a resumed job, measures exactly the same questions.
      */
-    static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable, Integer limit) {
+    public static Loaded load(JdbcTemplate j, ObjectMapper json, UUID testsetId, boolean includeUnanswerable, Integer limit) {
         record Row(UUID id, String qtype, String question, String expected, String spans) {}
         List<Row> rows = j.query("SELECT id, qtype, question, expected_answer, gold_chunk_spans::text AS spans FROM test_questions "
                 + "WHERE testset_id = ? AND review_status IN ('ACCEPTED', 'EDITED') ORDER BY seq",

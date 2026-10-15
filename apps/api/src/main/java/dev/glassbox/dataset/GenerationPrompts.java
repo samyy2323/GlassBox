@@ -19,6 +19,16 @@ public final class GenerationPrompts {
             - The answer must be stated in the passages, in at most two sentences.
             Reply with one JSON object and nothing else: {"question": "...", "expected_answer": "..."}""";
 
+    public static final String UNANSWERABLE_SYSTEM = """
+            You write exam questions for testing whether a document search system admits when it does not know. You are given one passage.
+            Write ONE question that is closely related to the passage (same subject, same names and terms) but asks for a specific detail
+            that the passage does NOT state and cannot be worked out from it. Someone with only this document must have to say "not stated".
+            Rules:
+            - The question must make sense on its own and name the specific thing it is about.
+            - Never write "the passage", "the document", "the text" or "the author" in the question.
+            - Do not ask for an opinion or a prediction; ask for a concrete fact such as an amount, a name, a date or a reason.
+            Reply with one JSON object and nothing else: {"question": "...", "expected_answer": "Not stated in the documents."}""";
+
     private static String instruction(String type) {
         return switch (type) {
             case QuestionSampler.NUMERIC -> "The answer must be a number, amount, date, duration or percentage with its unit.";
@@ -36,6 +46,7 @@ public final class GenerationPrompts {
             if (text.length() > MAX_PASSAGE_CHARS) text = text.substring(0, MAX_PASSAGE_CHARS);
             user.append("Passage ").append(label++).append(" (from \"").append(c.title()).append("\"):\n").append(text).append("\n\n");
         }
+        if (type.equals(QuestionSampler.UNANSWERABLE)) return List.of(Message.system(UNANSWERABLE_SYSTEM), Message.user(user.toString().strip()));
         user.append(instruction(type));
         return List.of(Message.system(GENERATOR_SYSTEM), Message.user(user.toString()));
     }

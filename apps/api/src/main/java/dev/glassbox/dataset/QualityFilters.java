@@ -14,7 +14,9 @@ public final class QualityFilters {
     public static final String AMBIGUOUS = "AMBIGUOUS";
     public static final String LOW_ANSWERABILITY = "LOW_ANSWERABILITY";
     public static final String DUPLICATE = "DUPLICATE";
-    public static final List<String> ALL = List.of(COPY_RISK, AMBIGUOUS, LOW_ANSWERABILITY, DUPLICATE);
+    /** An UNANSWERABLE question that a model answered from what the pipeline retrieved: the corpus may in fact answer it. */
+    public static final String ANSWERABLE_RISK = "ANSWERABLE_RISK";
+    public static final List<String> ALL = List.of(COPY_RISK, AMBIGUOUS, LOW_ANSWERABILITY, DUPLICATE, ANSWERABLE_RISK);
 
     /** More than this share of the question's words found in the evidence makes keyword search look better than it is. */
     public static final double COPY_THRESHOLD = 0.7;
@@ -48,6 +50,13 @@ public final class QualityFilters {
         Set<String> want = Words.content(expected);
         if (want.isEmpty()) want = Words.all(expected);
         return Words.overlap(want, Words.all(produced.toLowerCase(Locale.ROOT)));
+    }
+
+    /** True when a model's reply says the text does not contain the answer (the answer prompt's refusal is "NOT STATED"). */
+    public static boolean saysNotStated(String reply) {
+        if (reply == null) return false;
+        String r = reply.strip().toUpperCase(Locale.ROOT).replaceAll("[^A-Z ]", " ").replaceAll("\\s+", " ").strip();
+        return r.startsWith("NOT STATED") || r.startsWith("THE TEXT DOES NOT") || r.startsWith("NO ANSWER");
     }
 
     public static double cosine(float[] a, float[] b) {

@@ -275,6 +275,42 @@ class TestSetApiTest extends ApiTestSupport {
         assertThat(questions(a, t.get("id").asText(), "")).isEmpty();
     }
 
+    private JsonNode generatedUnanswerable(Account a, String name, int count) throws Exception {
+        String id = ok(send(post("/api/testsets/generate"), a, "{\"name\":\"" + name + "\",\"count\":" + count + ",\"seed\":5,\"mix\":{\"UNANSWERABLE\":1}}")).get("testset").get("id").asText();
+        drainQueue();
+        return set(a, id);
+    }
+
+    @Test
+    void unanswerableQuestionsHaveNoEvidenceAndAreConfirmedByRetrieval() throws Exception {
+        Account a = accountWithDocs(2, 5);
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> {
+            assertThat(r.messages().get(0).content()).as("the unanswerable prompt is used").contains("does NOT state");
+            return scripted("What warranty period applies to the compressor unit? NOTANSWERABLE", "Not stated in the documents.");
+        };
+        JsonNode t = generatedUnanswerable(a, "unanswerable", 2);
+        assertThat(t.get("status").asText()).isEqualTo("DRAFT");
+        List<JsonNode> qs = questions(a, t.get("id").asText(), "");
+        assertThat(qs).hasSize(2);
+        for (JsonNode q : qs) {
+            assertThat(q.get("qtype").asText()).isEqualTo("UNANSWERABLE");
+            assertThat(q.get("evidence")).isEmpty();
+            assertThat(q.get("expectedAnswer").asText()).isEqualTo("Not stated in the documents.");
+            assertThat(q.get("flags").toString()).as("retrieval found nothing that answers it").doesNotContain("ANSWERABLE_RISK");
+        }
+    }
+
+    @Test
+    void anUnanswerableQuestionThatTheRetrievedTextAnswersIsFlaggedNotDropped() throws Exception {
+        Account a = accountWithDocs(2, 5);
+        FakeLlmProvider.GENERATOR_SCRIPT = r -> scripted("What does the system report to operators every day?", "Not stated in the documents.");
+        JsonNode t = generatedUnanswerable(a, "risky", 1);
+        List<JsonNode> qs = questions(a, t.get("id").asText(), "");
+        assertThat(qs).hasSize(1);
+        assertThat(qs.get(0).get("qtype").asText()).isEqualTo("UNANSWERABLE");
+        assertThat(qs.get(0).get("flags").toString()).contains("ANSWERABLE_RISK");
+    }
+
     @Test
     void generationIsRefusedWithoutReadyDocumentsOrWithBadInput() throws Exception {
         Account empty = register();
@@ -284,7 +320,7 @@ class TestSetApiTest extends ApiTestSupport {
         send(post("/api/testsets/generate"), a, "{\"name\":\"\",\"count\":5}").andExpect(status().isBadRequest());
         send(post("/api/testsets/generate"), a, "{\"name\":\"x\",\"count\":0}").andExpect(status().isBadRequest());
         send(post("/api/testsets/generate"), a, "{\"name\":\"x\",\"count\":201}").andExpect(status().isBadRequest());
-        send(post("/api/testsets/generate"), a, "{\"name\":\"x\",\"count\":5,\"mix\":{\"UNANSWERABLE\":1}}").andExpect(status().isBadRequest());
+        send(post("/api/testsets/generate"), a, "{\"name\":\"x\",\"count\":5,\"mix\":{\"TRICKY\":1}}").andExpect(status().isBadRequest());
         send(post("/api/testsets/generate"), a, "{\"name\":\"x\",\"count\":5,\"mix\":{\"FACTUAL\":-1}}").andExpect(status().isBadRequest());
         generate(a, "dup", 2);
         send(post("/api/testsets/generate"), a, "{\"name\":\"dup\",\"count\":2}").andExpect(status().isConflict());

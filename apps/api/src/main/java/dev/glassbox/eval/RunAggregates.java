@@ -17,6 +17,9 @@ public final class RunAggregates {
     public static final String CLUSTER = "cluster";
     public static final String LATENCY_P50 = "latency_p50_ms";
     public static final String LATENCY_P95 = "latency_p95_ms";
+    /** Of everything the system refused, the share that really was unanswerable. Run level: a ratio of counts, so no interval. */
+    public static final String ABSTENTION_PRECISION = "abstention_precision";
+    public static final String ABSTENTION_F1 = "abstention_f1";
 
     /** One measured question: its type, the document its evidence comes from (the cluster), its scores and how long retrieval took. */
     public record Score(String qtype, int cluster, Map<String, Double> metrics, long latencyMs) {}
@@ -50,7 +53,26 @@ public final class RunAggregates {
             rows.add(new Row(LATENCY_P50, ALL, QUESTION, Summary.percentile(latency, 50), Double.NaN, Double.NaN, latency.length));
             rows.add(new Row(LATENCY_P95, ALL, QUESTION, Summary.percentile(latency, 95), Double.NaN, Double.NaN, latency.length));
         }
+        abstention(scores, rows);
         return rows;
+    }
+
+    /**
+     * Precision and F1 of abstaining. Recall is {@code abstention_accuracy} (the share of unanswerable questions refused). A refusal is either a
+     * correct one (on an unanswerable question) or a false one (on an answerable question), so precision needs both counts.
+     */
+    static void abstention(List<Score> scores, List<Row> rows) {
+        double correct = 0, wrong = 0;
+        int unanswerable = 0, n = 0;
+        for (Score s : scores) {
+            Double acc = s.metrics().get(Metrics.ABSTENTION_ACCURACY), fa = s.metrics().get(Metrics.FALSE_ABSTENTION);
+            if (acc != null) { correct += acc; unanswerable++; n++; }
+            if (fa != null) { wrong += fa; n++; }
+        }
+        if (unanswerable == 0 || correct + wrong == 0) return; // nothing was refused, or nothing could be: precision is undefined, not zero
+        double precision = correct / (correct + wrong), recall = correct / unanswerable;
+        rows.add(new Row(ABSTENTION_PRECISION, ALL, QUESTION, precision, Double.NaN, Double.NaN, n));
+        if (precision + recall > 0) rows.add(new Row(ABSTENTION_F1, ALL, QUESTION, 2 * precision * recall / (precision + recall), Double.NaN, Double.NaN, n));
     }
 
     private static Row row(String name, String slice, String method, List<Score> scores, String metric, long seed) {

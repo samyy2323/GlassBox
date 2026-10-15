@@ -236,4 +236,32 @@ class EvalUnitTest {
     void emptyInputGivesNoRows() {
         assertThat(Comparisons.compare(new LinkedHashMap<>(), new LinkedHashMap<>(), "none")).isEmpty();
     }
+
+    private static RunAggregates.Score abstain(String type, String metric, double value) {
+        return new RunAggregates.Score(type, 0, Map.of(metric, value), 1);
+    }
+
+    private static double value(List<RunAggregates.Row> rows, String metric) {
+        return rows.stream().filter(r -> r.metric().equals(metric)).findFirst().orElseThrow().value();
+    }
+
+    @Test
+    void abstentionPrecisionAndF1CountBothKindsOfRefusal() {
+        // 4 unanswerable (3 refused), 6 answerable (1 wrongly refused): 4 refusals, 3 of them right
+        List<RunAggregates.Score> scores = new ArrayList<>();
+        for (double d : new double[] {1, 1, 1, 0}) scores.add(abstain("UNANSWERABLE", Metrics.ABSTENTION_ACCURACY, d));
+        for (double d : new double[] {1, 0, 0, 0, 0, 0}) scores.add(abstain("FACTUAL", Metrics.FALSE_ABSTENTION, d));
+        List<RunAggregates.Row> rows = RunAggregates.compute(scores, 3);
+        assertThat(value(rows, Metrics.ABSTENTION_ACCURACY)).isCloseTo(0.75, within(1e-12));   // recall
+        assertThat(value(rows, RunAggregates.ABSTENTION_PRECISION)).isCloseTo(0.75, within(1e-12));
+        assertThat(value(rows, RunAggregates.ABSTENTION_F1)).isCloseTo(0.75, within(1e-12));
+    }
+
+    @Test
+    void abstentionPrecisionIsLeftOutWhenNothingWasRefusedOrNothingCouldBe() {
+        List<RunAggregates.Score> neverRefuses = List.of(abstain("UNANSWERABLE", Metrics.ABSTENTION_ACCURACY, 0), abstain("FACTUAL", Metrics.FALSE_ABSTENTION, 0));
+        assertThat(RunAggregates.compute(neverRefuses, 1)).noneMatch(r -> r.metric().equals(RunAggregates.ABSTENTION_PRECISION));
+        List<RunAggregates.Score> noUnanswerable = List.of(abstain("FACTUAL", Metrics.FALSE_ABSTENTION, 1));
+        assertThat(RunAggregates.compute(noUnanswerable, 1)).noneMatch(r -> r.metric().equals(RunAggregates.ABSTENTION_F1));
+    }
 }
