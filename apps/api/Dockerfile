@@ -1,5 +1,5 @@
 # Build context: repository root (migrations live in db/migrations).
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /src
 COPY apps/api/pom.xml apps/api/pom.xml
 COPY db db
