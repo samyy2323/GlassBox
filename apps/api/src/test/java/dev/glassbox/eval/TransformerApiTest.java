@@ -44,6 +44,8 @@ class TransformerApiTest extends EvalApiSupport {
         assertThat(calls).isBetween(3, 3 * questions);
         assertThat(calls % 3).isZero();
         assertThat(count(a, "SELECT count(*) FROM llm_cache")).isEqualTo(calls);
+        // the rewriting calls are spend too, in a retrieval run as well: the budget page and a call cap used to see none of them
+        assertThat(count(a, "SELECT coalesce(sum(actual_calls), 0) FROM spend_log")).as("counted at least as many as were made").isGreaterThanOrEqualTo(calls);
 
         // the same experiment again: every model call is served from the cache
         FakeLlmProvider.TRANSFORM_CALLS.set(0);

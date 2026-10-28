@@ -10,7 +10,7 @@ Multi-tenant RAG evaluation and auto-tuning platform: upload documents, generate
 | P1 Ingest, retrieve, chat: queue, parsers, chunkers, embeddings, hybrid search, rerank, streaming cited answers | done |
 | P2 X-Ray trace viewer, test sets, review queue | done |
 | P3 Eval Lab: experiments, metrics, confidence intervals and significance tests, claim verification, judge calibration | done |
-| P5 Feedback loop, document change impact, query transformers, cost control, reports | built and tested; not demonstrated live (see below) |
+| P5 Feedback loop, document change impact, query transformers, cost control, reports | built, tested and run once on the live stack with `llama3.2:3b` (see the P5 run below) |
 | P4 AutoTune with a held-out split, failure diagnosis, UNANSWERABLE questions, parent_child chunker | built and measured; the acceptance check is **not met** on quality (see the P4 run below) |
 
 What works today: upload almost any document (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, Markdown, HTML, CSV, JSON, XML, plain text and source code; images, audio and video need OCR or transcription and are refused with a clear reason); asynchronous ingestion with live status; hybrid (vector + keyword) search fused inside Postgres; optional cross-encoder reranking; streamed answers with clickable citations; an answer that says "not in the documents" instead of guessing; tenant isolation enforced by the database; X-Ray for every answer; versioned test sets generated from your own documents, with a keyboard-driven review queue; experiments that compare pipeline configurations with confidence intervals and tests of significance; claim-by-claim checking of answers; a calibration page that measures how far the answer judge can be trusted; AutoTune, which searches chunking, embedding model and retrieval settings and confirms the winner on questions it never saw; a failure report that says at which stage of the pipeline each missed question was lost; thumbs on every answer that feed an inbox where a bad answer becomes a test question; a replaced document that re-locates its test questions and re-runs the earlier measurement; query rewriting (multi-query, HyDE, decomposition); prices, budgets and a hard stop for a run that overspends; and PDF reports and expiring read-only links.
@@ -82,7 +82,7 @@ The first build downloads Maven and Python dependencies and the embedding models
 Needs JDK 21 and Docker (Testcontainers starts a real pgvector Postgres):
 
 ```bash
-cd apps/api && ./mvnw verify      # 399 tests: isolation, queue concurrency, chunker properties, retrieval SQL, chat, traces, test sets, statistics against SciPy fixtures, experiments, calibration, indexing, failure classifier, AutoTune, transformers, budgets, feedback, document changes, reports
+cd apps/api && ./mvnw verify      # 400 tests: isolation, queue concurrency, chunker properties, retrieval SQL, chat, traces, test sets, statistics against SciPy fixtures, experiments, calibration, indexing, failure classifier, AutoTune, transformers, budgets, feedback, document changes, reports
 cd apps/web && npm ci && npm test # 128 tests: SSE parser, highlighting, review shortcuts, selection offsets, forest plot and heatmap layout, calibration queue, AutoTune and failure report layout, the pages rendered from a real API response, the budget, feedback, change and report pages; also npm run lint and npm run build
 cd apps/ml-sidecar && pip install -r requirements-dev.txt && python -m pytest
 python benchmarks/stats_fixtures.py   # regenerates the SciPy reference values the Java statistics are checked against
@@ -161,6 +161,31 @@ What mattered (average context recall by setting, on the questions every candida
 
 To make AutoTune show a quality gain, the corpus has to be harder than this one: sections that do not name their site, more distractors per fact, longer sections that a 512-token window cuts in half. That, and a stronger model to write multi-hop questions, is the next thing to try; I did not tune the benchmark until it produced a win.
 
+### P5 acceptance run: each feature once on the live stack
+
+`python benchmarks/autotune_demo.py prepare`, then `python benchmarks/p5_demo.py feedback | transformers | budget | change | report`. Same twelve handbooks as P4 (120 questions generated in 26.1 minutes, 13 s each; 81 accepted by the rule, 39 rejected; `llama3.2:3b` on a laptop CPU). One run of each; nothing here is repeated for variance.
+
+- **Feedback.** A chat answer took 19.4 s cold and 2.0 s when the same question was asked again; a thumbs-down reached the inbox with the 50 passages the search had looked at. With the right passage marked, the classifier said the evidence had reached the prompt, so retrieval was not the problem, and warned that the answer cited no source. Converting it made a `FEEDBACK` question in a new draft version of the test set (1 of 82 questions now). Converting a question the set already held was refused with 409.
+- **Query transformers** (30 questions, 4 configurations, retrieval only, 548 s):
+
+  | | Context recall (95% CI) | MRR | Latency p50 |
+  |---|---|---|---|
+  | no transformer | 98.3% [95.0, 100] | 93.6% | 26 ms |
+  | multi_query | 98.3% [95.0, 100] | 93.6% | 4.9 s |
+  | hyde | 98.3% [95.0, 100] | 93.2% | 7.9 s |
+  | decompose | 93.3% [83.3, 100] | 86.9% | 5.0 s |
+
+  No transformer helped, because plain hybrid search already finds the evidence for nearly every question on this corpus, and each one costs seconds of latency. Decompose was lower, though the intervals overlap. This says nothing about harder corpora with real multi-hop questions (this set has 4).
+- **Budget.** A full-answer run estimated at 100 model calls with a cap of 10 was refused with 409 before anything was created. The 120% stop of a running experiment was **not** triggered live (a run is only started when its estimate fits the cap, and the model does not overshoot its estimate on purpose); it is covered by `BudgetApiTest`.
+- **Document change.** Replacing one handbook four times (the first was skipped because the draft from the feedback step was still open, which is the case behind bug 2 below): the paragraph diff showed one paragraph replaced each time; the regression run (re-run of the configuration last measured on that test set) compared 94.4% before with 93.0% after over 71 questions, "no significant difference", one question went from pass to fail (a ranking miss). When the replaced paragraph held gold evidence, 6 spans were re-located and 3 questions marked stale.
+- **Reports.** A report of that regression run made a 2-page PDF (summary, test set statistics, configuration, metrics with intervals); its read-only link opened with no sign-in (HTTP 200, `Cache-Control: no-store`) and gave 404 once revoked.
+
+**Two bugs this run found that the 399 tests had not**, both fixed with a test that fails on the old code:
+1. Query rewriting calls were not counted as spend in a retrieval run: the budget page showed 0 actual calls against 90 estimated, and a call cap could never see them.
+2. A document replacement skipped because a draft test set was open left the test set's spans pointing at the older version; every later replacement then ignored them, so questions whose evidence had been deleted stayed accepted. Spans are now re-located from the text of the version they point at.
+
+Limits of this run: the replaced paragraphs are synthetic text written by the script, not real edits; the regression run used `decompose` because that was the last configuration measured on the test set; no judge-scored full-answer experiment was run for P5.
+
 ## Limitations (so far)
 
 - Answers from a small local model sometimes omit a citation; claim-level verification arrives in P3.
@@ -169,5 +194,5 @@ To make AutoTune show a quality gain, the corpus has to be harder than this one:
 - No OCR: scanned PDFs are rejected with a clear message.
 - Eval Lab: the judge is the model that writes the answers. Claim checking uses a small NLI model that over-trusts word overlap and under-trusts paraphrase. The sample labels in the acceptance run were not given by a person. Experiment answer traces are kept for the trace retention period (30 days), after which their X-Ray links stop opening.
 - AutoTune: the search space leaves out query transformers and the generation model (P5). The held-out part is small on a small test set, so only large differences can be confirmed; the page says how large. Candidate labels show chunking, model, retrieval and top n but not the candidate count or budget, so two finalists can look identical in the table. The full-answer stage has been run only against the fake models in tests, not on the local model. The held-out check ignores unanswerable questions unless the full stage is on. Only an owner can promote.
-- P5: the feedback inbox classifies from a stored trace, so it can say where the pipeline lost a passage but not whether the answer was wrong; that is left to the person. Gold spans are re-located by text, so a document that was reorganised and reworded is mostly marked stale and goes back to review. The regression run measures retrieval only. `rewrite` is not implemented (chat has no history). The cache covers transformer calls but not judge or claim-check calls. AutoTune has no dollar cap. Reports hold numbers, not charts of every metric. **None of this has been run against the live stack with the local model; it is covered by tests with deterministic fakes, rendered pages and the same suites CI runs, and a P5 demo script and the measured numbers are still to be produced.**
+- P5: the feedback inbox classifies from a stored trace, so it can say where the pipeline lost a passage but not whether the answer was wrong; that is left to the person. Gold spans are re-located by text, so a document that was reorganised and reworded is mostly marked stale and goes back to review. The regression run measures retrieval only. `rewrite` is not implemented (chat has no history). The cache covers transformer calls but not judge or claim-check calls. AutoTune has no dollar cap. Reports hold numbers, not charts of every metric. Each feature was run once on the live stack (see the P5 run above), but the pages were not looked at in a browser, and the 120% stop was only exercised by tests.
 - Test sets: unanswerable questions are generated around a passage and flagged when a model can answer them from what the search finds, but the check is the same 3B model, so a person should review them; the answerability judge is lexical, not a model judge (P3); quality flags are not recomputed when a reviewer edits a question; generation uses the chat model (a separate generator model is not configurable yet).

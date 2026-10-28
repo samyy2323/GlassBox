@@ -71,6 +71,25 @@ class ChangeImpactApiTest extends EvalApiSupport {
     }
 
     @Test
+    void aSkippedReplacementDoesNotHideStaleQuestionsFromTheNextOne() throws Exception {
+        Account a = accountWithDocs(2, 5);
+        String set = finalTestSet(a, "skipped", 10);
+        String doc = docId(a, "Doc0");
+        // version 2 is skipped because a draft is open; the spans of the test set still point at version 1
+        String draft = ok(send(post("/api/testsets/" + set + "/versions"), a, null)).get("id").asText();
+        replace(a, doc, markdown("Topic0", 4, 0));
+        assertThat(ok(send(get("/api/documents/" + doc + "/versions/2/impact"), a, null)).get("status").asText()).isEqualTo("SKIPPED");
+        ok(send(post("/api/testsets/" + draft + "/finalize"), a, "{\"allowPending\":false}"));
+
+        // version 3 drops sections that version 1 had: those spans must be found stale although they never pointed at version 2
+        replace(a, doc, markdown("Topic0", 1, 0));
+        JsonNode report = ok(send(get("/api/documents/" + doc + "/versions/3/impact"), a, null));
+        assertThat(report.get("status").asText()).as("note: %s", report.get("note")).isEqualTo("DONE");
+        assertThat(report.get("stale").asInt()).as("questions whose evidence no longer exists").isGreaterThan(0);
+        assertThat(report.get("staleQuestions")).hasSize(report.get("stale").asInt());
+    }
+
+    @Test
     void aReplacedDocumentNoTestSetAsksAboutHasNothingToRelocate() throws Exception {
         Account a = accountWithDocs(1, 3);
         String doc = docId(a, "Doc0");

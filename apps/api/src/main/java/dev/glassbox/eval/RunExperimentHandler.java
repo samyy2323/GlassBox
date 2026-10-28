@@ -135,7 +135,7 @@ public class RunExperimentHandler implements JobHandler {
         if (target.capUsd() == null && target.capCalls() == null) return false;
         var totals = tx.workspace(ws, null, j -> j.queryForMap("SELECT coalesce(sum(r.cost_usd), 0) AS usd, count(*) AS n FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = ?", experimentId));
         double usd = ((Number) totals.get("usd")).doubleValue();
-        long calls = ((Number) totals.get("n")).longValue() * LLM_CALLS_PER_QUESTION;
+        long calls = actualCalls(ws, experimentId);
         boolean overUsd = CostEstimator.overCap(usd, target.capUsd()), overCalls = CostEstimator.overCap(calls, target.capCalls() == null ? null : target.capCalls());
         if (!overUsd && !overCalls) return false;
         String why = overUsd ? String.format("spend of $%.2f passed 120%% of the $%.2f cap", usd, target.capUsd()) : calls + " model calls passed 120% of the cap of " + target.capCalls();
@@ -149,6 +149,29 @@ public class RunExperimentHandler implements JobHandler {
         return true;
     }
 
+    /**
+     * Model calls made so far: the answer and judge calls of a full run, plus the rewriting calls of a configuration with a query transformer (also in a
+     * retrieval run). A transformer answer served from the cache is still counted, so this is an upper bound.
+     */
+    private long actualCalls(UUID ws, UUID experimentId) {
+        var rows = tx.workspace(ws, null, j -> j.queryForList("SELECT c.config::text AS config, e.mode AS mode, "
+                + "(SELECT count(*) FROM run_results x WHERE x.run_id = r.id) AS results "
+                + "FROM runs r JOIN pipeline_configs c ON c.id = r.config_id JOIN experiments e ON e.id = r.experiment_id WHERE r.experiment_id = ?", experimentId));
+        long calls = 0;
+        for (var row : rows) {
+            long results = ((Number) row.get("results")).longValue();
+            int perQuestion = "FULL".equals(row.get("mode")) ? LLM_CALLS_PER_QUESTION : 0;
+            try {
+                var t = json.readValue((String) row.get("config"), PipelineConfig.class).transformer();
+                if (t != null) perQuestion += t.llmCalls();
+            } catch (Exception e) {
+                log.warn("could not read the configuration of a run of experiment {}: {}", experimentId, e.toString());
+            }
+            calls += results * perQuestion;
+        }
+        return calls;
+    }
+
     /** Estimate against actual, for the budget page and the estimator's own error. */
     private void recordSpend(UUID ws, UUID experimentId, boolean aborted) {
         var row = tx.workspace(ws, null, j -> j.queryForMap("SELECT e.estimated_cost::text AS estimated, "
@@ -157,7 +180,7 @@ public class RunExperimentHandler implements JobHandler {
                 + "(SELECT count(*) FROM run_results r JOIN runs u ON u.id = r.run_id WHERE u.experiment_id = e.id) AS results, e.mode FROM experiments e WHERE e.id = ?", experimentId));
         try {
             var est = json.readTree((String) row.get("estimated"));
-            long calls = "FULL".equals(row.get("mode")) ? ((Number) row.get("results")).longValue() * LLM_CALLS_PER_QUESTION : 0;
+            long calls = actualCalls(ws, experimentId);
             budgets.record(ws, "EXPERIMENT", experimentId, est.path("usd").asDouble(0), ((Number) row.get("usd")).doubleValue(), est.path("tokens").asLong(0),
                     ((Number) row.get("tokens")).longValue(), est.path("llmCalls").asInt(0), (int) calls, aborted);
         } catch (Exception e) {

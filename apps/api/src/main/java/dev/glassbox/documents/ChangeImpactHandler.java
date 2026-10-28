@@ -12,6 +12,7 @@ import dev.glassbox.retrieval.PipelineConfig;
 import dev.glassbox.retrieval.WorkspaceDefaults;
 import dev.glassbox.tenancy.Tx;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -92,8 +93,8 @@ public class ChangeImpactHandler implements JobHandler {
             finish(j, docId, version, "SKIPPED", "The earlier version's text is not available.", null, null, null, 0, 0);
             return;
         }
-        UUID oldVersionId = (UUID) versions.get(0).get("id"), newVersionId = (UUID) versions.get(1).get("id");
-        String oldText = (String) versions.get(0).get("normalized_text"), newText = (String) versions.get(1).get("normalized_text");
+        UUID newVersionId = (UUID) versions.get(1).get("id");
+        String newText = (String) versions.get(1).get("normalized_text");
         String title = j.queryForObject("SELECT title FROM documents WHERE id = ?", String.class, docId);
 
         // the most recently finalized version of a test set that has questions about this document
@@ -116,6 +117,11 @@ public class ChangeImpactHandler implements JobHandler {
         j.update("INSERT INTO test_questions (workspace_id, testset_id, stable_id, question, expected_answer, gold_chunk_spans, qtype, origin, review_status, quality_flags, source_trace_id, meta) "
                 + "SELECT workspace_id, ?, stable_id, question, expected_answer, gold_chunk_spans, qtype, origin, review_status, quality_flags, source_trace_id, meta "
                 + "FROM test_questions WHERE testset_id = ? AND review_status <> 'REJECTED' ORDER BY seq", newSet, setId);
+        // A span points at the document version the test set was written against, which can be older than the one just replaced: an earlier
+        // replacement may have been skipped (a draft was open) or the test set was not touched by it. Each span is re-located from its own version's text.
+        Map<UUID, String> earlier = new HashMap<>();
+        for (var v : j.queryForList("SELECT id, normalized_text FROM document_versions WHERE document_id = ? AND version < ?", docId, version))
+            if (v.get("normalized_text") != null) earlier.put((UUID) v.get("id"), (String) v.get("normalized_text"));
         int relocated = 0, stale = 0;
         var rows = j.queryForList("SELECT id, gold_chunk_spans::text AS spans, review_status FROM test_questions WHERE testset_id = ? AND gold_chunk_spans::text LIKE ?", newSet, "%" + docId + "%");
         for (var row : rows) {
@@ -123,12 +129,13 @@ public class ChangeImpactHandler implements JobHandler {
             List<GoldSpan> out = new ArrayList<>();
             boolean touched = false, lost = false;
             for (GoldSpan s : spans) {
-                if (!s.documentId().equals(docId) || !s.versionId().equals(oldVersionId)) {
+                if (!s.documentId().equals(docId) || s.versionId().equals(newVersionId)) {
                     out.add(s);
                     continue;
                 }
                 touched = true;
-                var found = SpanRelocator.relocate(oldText, newText, s.charStart(), s.charEnd());
+                String from = earlier.get(s.versionId());
+                var found = from == null ? java.util.Optional.<SpanRelocator.Located>empty() : SpanRelocator.relocate(from, newText, s.charStart(), s.charEnd());
                 if (found.isEmpty()) {
                     lost = true;
                     out.add(s);
