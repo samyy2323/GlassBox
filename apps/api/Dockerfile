@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/root/.m2 mvn -f apps/api/pom.xml -q -B dependency
 COPY apps/api/src apps/api/src
 RUN --mount=type=cache,target=/root/.m2 mvn -f apps/api/pom.xml -q -B -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --no-create-home glassbox     && mkdir -p /data/files && chown 10001 /data/files
 COPY --from=build /src/apps/api/target/glassbox-api-*.jar /app/app.jar
