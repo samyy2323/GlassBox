@@ -1,6 +1,6 @@
 # ADR 0010: Hardening: isolation canaries, the injection suite, request limits, audit log, upload guard
 
-Status: accepted (2026-10-29). The CLI and gate decisions are added to this record when they are built.
+Status: accepted (2026-10-29). Covers the hardening work of P6, then observability, the quality gate, the CLI and the pull request action.
 
 ## Isolation is tested end to end, not only at the table
 
@@ -58,7 +58,60 @@ payment and USB, no-store caching, and HSTS on HTTPS requests; tested on 200, 40
 a foreign origin and an unknown header are refused). Dependabot covers Maven, npm, pip, Docker and GitHub Actions; secrets and vulnerable dependencies are scanned on every push by the Trivy job
 (a separate gitleaks job was not added, as Trivy's secret scanner already runs).
 
-## Not done
+## Not done (hardening)
 
 Provider API keys are not stored by any feature yet (the table and its row-level security exist), so encrypting them with AES-GCM is not built. CSRF tokens are not used: authentication is a bearer
 token or API key header, and the one cookie (refresh) is SameSite=Strict, path-scoped and needs a custom header.
+
+## Observability
+
+Metrics named in the SPEC are all exported: `ingest_queue_depth` and `experiment_runs_active` (gauges read from the database when scraped and cached for five seconds, counted across
+all workspaces because they describe the system), `ingest_duration` and `retrieval_stage_duration{stage}` (histograms), `llm_tokens_total{provider,model,direction}`,
+`llm_cost_usd_total`, `job_retries_total`, `rls_context_missing_total`, plus `rate_limited_total{scope}` and the HTTP server latency buckets. No metric carries a workspace id as a label
+(tested): a label per tenant would be unbounded and would put tenant ids on a scrape endpoint. Tokens are counted in the project's own units, which run below a real tokenizer's count.
+
+Logs are one JSON object per line (Spring Boot's logstash format, switched on in the compose file by `LOGGING_STRUCTURED_FORMAT_CONSOLE`) carrying `traceId` and `spanId` from the
+OpenTelemetry bridge and `workspace_id`. The workspace comes from the one place it is verified, the transaction wrapper `Tx`; the per-request log line (`RequestLogFilter`) adds it only when
+the request succeeded, because only then has the header been checked against the caller's memberships. It never logs a query string, header or body, and replaces the token of a share link
+in its path. Nothing is exported over OTLP until an endpoint is configured. `/actuator/prometheus` is open on the API port for the scraper and is not routed by the web container's proxy;
+a deployment should keep that port off the internet.
+
+The dashboard (`deploy/grafana/dashboards/glassbox.json`) and the alert rules (`deploy/prometheus/alerts.yml`, including queue depth above 50 for ten minutes) are checked by a test that
+extracts every metric name they use and requires the application to export it; that test found that the HTTP latency panel would have been empty because Spring publishes no buckets for
+`http.server.requests` unless asked. `docker compose --profile observability up` starts Prometheus and Grafana. The OpenAPI description (springdoc, `/api/docs/openapi`, behind sign-in)
+is checked against the router: every route the application serves must be in it.
+
+## The quality gate
+
+`POST /api/ci/run` starts an ordinary experiment (kind REGRESSION, one configuration) and stores the rules it is judged by; `GET /api/ci/runs/{id}` works the verdict out from the finished
+experiment each time, as `json`, `md` (a table for a pull request comment) or `junit`. Because it is an experiment, the budget, the cap on concurrent runs, the queue, the audit log and the
+isolation tests apply without gate-specific code.
+
+- **Minimum**: the metric must be at least the given fraction. The measured value is compared by default; with `strict`, the lower end of its 95% interval, so a pass means "confidently at least".
+- **Regression** (needs a baseline run on the same test set version): the gate fails **only when the drop is larger than the allowed drop and statistically significant** (the Eval Lab's paired
+  test, p below `alpha`, default 0.05). A large drop that cannot be told from noise is reported and does not block, because a gate that blocks on noise gets switched off. An improvement or no
+  change passes. A missing comparison fails; it is never a silent pass.
+- **States**: PASSED, FAILED (a rule broke), ERROR (the run failed, was cancelled, or the baseline cannot be compared) and RUNNING. The CLI maps them to exit codes 0, 1, 2 and 2, so a broken
+  gate is never mistaken for a failed one or for a pass. A gate with no checks passes nothing.
+- A key needs the `run` scope to start a gate and any scope to read one. Text that reaches the Markdown table or the XML (metric titles, reasons) is escaped.
+
+Test sets move between workspaces as JSON lines (`GET /api/testsets/{id}/export`, `POST /api/testsets/import`): each question carries the title of its document and the quoted evidence,
+not ids. On import the quote is found again in the current text of the document with that title (exact, then re-spaced, then a passage sharing 75% of its words, the same matching as a
+replaced document), and a question whose evidence cannot be found is reported and left out, never kept with a guess.
+
+## The CLI and the pull request action
+
+`cli/` is a small picocli program (`glassbox login | run | testset export|import | report`) over the HTTP API, one jar. Exit codes: 0 passed, 1 gate failed, 2 error (usage, no sign-in,
+network, server refusal). `GLASSBOX_SERVER` and `GLASSBOX_API_KEY` take precedence over the saved file, so CI needs no login step and the key never appears on a command line; the file is
+readable by its owner only. Output for people goes to standard output and progress to standard error, so `glassbox run > summary.md` works.
+
+`.github/actions/glassbox-gate` runs the CLI and keeps **one** comment on the pull request up to date. Its inputs reach scripts only through environment variables. A comment that cannot be
+written (a fork's read-only token) never changes the result. `.github/workflows/gate.yml` gates Glassbox's own retrieval code: it starts the stack in the runner with throwaway secrets, loads
+the frozen documents (`benchmarks/frozen/docs`) and the frozen test set (81 questions), measures the code against the minimums in `benchmarks/frozen/gate.json`, and then runs a
+deliberately bad configuration that **must** exit 1; if it does not, the job fails because the gate is broken.
+
+## Not done
+
+Rate-limit buckets are per process. The gate API does not yet put its result in the audit log beyond the start of the run. A baseline for the pull request's own gate would need the base branch
+built and measured in the same job; the frozen gate uses absolute minimums instead. The pull request action has been exercised through the CLI it wraps and the same commands in the
+workflow, not by GitHub itself until the workflow has run once on a pull request or by hand.

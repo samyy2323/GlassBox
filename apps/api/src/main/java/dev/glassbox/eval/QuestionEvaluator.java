@@ -34,7 +34,10 @@ public class QuestionEvaluator {
     private final RetrievalPipeline pipeline;
     private final FullScorer scorer;
 
-    public QuestionEvaluator(Tx tx, ObjectMapper json, RetrievalPipeline pipeline, FullScorer scorer) {
+    private final dev.glassbox.observability.LlmMetrics llmMetrics;
+
+    public QuestionEvaluator(Tx tx, ObjectMapper json, RetrievalPipeline pipeline, FullScorer scorer, dev.glassbox.observability.LlmMetrics llmMetrics) {
+        this.llmMetrics = llmMetrics;
         this.tx = tx;
         this.json = json;
         this.pipeline = pipeline;
@@ -88,6 +91,7 @@ public class QuestionEvaluator {
             tokensIn = scored.tokensIn();
             tokensOut = scored.tokensOut();
             cost = scored.costUsd();
+            llmMetrics.record(scorer.model(), tokensIn, tokensOut, cost);
             traceId = scored.traceId();
         }
         long latency = full ? (System.nanoTime() - started) / 1_000_000 : result.spans().stream().mapToLong(Span::millis).sum();

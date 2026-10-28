@@ -85,6 +85,20 @@ public class TestSetController {
         return sets.newVersion(p, WorkspaceService.resolve(p, ws), id);
     }
 
+    /** JSON lines: a header, then one accepted question per line. See {@link TestSetService#exportJsonl}. */
+    @GetMapping(value = "/testsets/{id}/export", produces = "application/x-ndjson")
+    public String export(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @PathVariable UUID id) {
+        return sets.exportJsonl(p, WorkspaceService.resolve(p, ws), id);
+    }
+
+    /** The body is the exported file. {@code name} overrides the name in its header; {@code finalize=true} makes the new set final. */
+    @PostMapping(value = "/testsets/import", consumes = {"application/x-ndjson", "text/plain"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public TestSetService.ImportResult importSet(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @RequestBody String body,
+                                                 @RequestParam(required = false) String name, @RequestParam(defaultValue = "false") boolean finalize) {
+        return sets.importJsonl(p, WorkspaceService.resolve(p, ws), name, body, finalize);
+    }
+
     @GetMapping("/testsets/{id}/diff")
     public Diff diff(@AuthenticationPrincipal Principal p, @RequestHeader(value = WS, required = false) UUID ws, @PathVariable UUID id, @RequestParam UUID against) {
         return sets.diff(p, WorkspaceService.resolve(p, ws), id, against);

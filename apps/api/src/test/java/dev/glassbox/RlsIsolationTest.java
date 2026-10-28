@@ -115,6 +115,8 @@ class RlsIsolationTest {
             exec(c, "INSERT INTO judge_calibrations (workspace_id, judge_model, rubric_version, metric, n, agreement, kappa) VALUES (?, ?, 'v1', 'correctness', 30, 0.9, 0.8)", ws, canary);
             exec(c, "INSERT INTO run_metrics (run_id, workspace_id, metric, n) VALUES (?, ?, ?, 1)", runA, ws, "m-" + canary);
             exec(c, "INSERT INTO comparisons (workspace_id, run_a, run_b, metric, delta, verdict) VALUES (?, ?, ?, 'm', 0, ?)", ws, runA, runB, canary);
+            // P6 tables
+            exec(c, "INSERT INTO ci_gates (experiment_id, workspace_id, spec) VALUES (?, ?, ?::jsonb)", exp, ws, "{\"c\":\"" + canary + "\"}");
             // P5 tables
             UUID report = UUID.randomUUID();
             exec(c, "INSERT INTO reports (id, workspace_id, kind, ref_id, title, snapshot) VALUES (?, ?, 'EXPERIMENT', ?, ?, '{}'::jsonb)", report, ws, UUID.randomUUID(), canary);

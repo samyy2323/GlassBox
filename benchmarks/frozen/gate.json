@@ -1,0 +1,4 @@
+{
+  "mode": "retrieval",
+  "failUnder": "recall@5=0.93,context_recall=0.93,mrr=0.90,context_pass=0.90"
+}

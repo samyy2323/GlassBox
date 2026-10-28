@@ -24,6 +24,13 @@ spring:
     default-property-inclusion: non_null
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true   # the dashboard's request latency panel needs the buckets
+  tracing:
+    sampling:
+      probability: 1.0   # every request gets a trace id for the logs; nothing is exported until an OTLP endpoint is configured
   endpoints:
     web:
       exposure:
@@ -104,3 +111,9 @@ glassbox:
     concurrency: 2
   cors:
     allowed-origins: ${GLASSBOX_CORS_ORIGINS:http://localhost:5173}
+
+springdoc:
+  api-docs:
+    path: /api/docs/openapi
+  swagger-ui:
+    enabled: false

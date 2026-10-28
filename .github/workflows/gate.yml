@@ -1,0 +1,109 @@
+name: quality gate
+
+# Glassbox gates its own retrieval code (SPEC 14). A pull request that touches retrieval, reranking, chunking, embedding, the prompt or the frozen benchmark starts the
+# whole stack in the runner, loads the frozen documents and the frozen test set (81 questions, each quoting its evidence), and measures the code of the pull request
+# against minimums in benchmarks/frozen/gate.json. A second, deliberately bad configuration must be BLOCKED: if it is not, the gate itself is broken and the job fails.
+on:
+  pull_request:
+    paths:
+      - "apps/api/src/main/java/dev/glassbox/retrieval/**"
+      - "apps/api/src/main/java/dev/glassbox/rerank/**"
+      - "apps/api/src/main/java/dev/glassbox/chunking/**"
+      - "apps/api/src/main/java/dev/glassbox/embed/**"
+      - "apps/api/src/main/java/dev/glassbox/index/**"
+      - "apps/api/src/main/java/dev/glassbox/generate/PromptBuilder.java"
+      - "apps/ml-sidecar/**"
+      - "benchmarks/frozen/**"
+      - "cli/**"
+      - ".github/actions/glassbox-gate/**"
+      - ".github/workflows/gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Secrets for a throwaway stack (generated here, never stored)
+        run: |
+          {
+            echo "POSTGRES_DB=glassbox"
+            echo "POSTGRES_SUPERUSER=postgres"
+            echo "POSTGRES_SUPERUSER_PASSWORD=$(openssl rand -hex 16)"
+            echo "GLASSBOX_OWNER_PASSWORD=$(openssl rand -hex 16)"
+            echo "GLASSBOX_APP_PASSWORD=$(openssl rand -hex 16)"
+            echo "GLASSBOX_JWT_SECRET=$(openssl rand -hex 32)"
+            echo "GLASSBOX_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+          } > .env
+
+      - name: Start the stack (database, embedding sidecar, API, worker)
+        run: docker compose -f deploy/docker-compose.yml --env-file .env up --build -d db ml-sidecar api worker
+
+      - name: Build the CLI
+        working-directory: cli
+        run: ./mvnw -B -q -DskipTests package
+
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8081/actuator/health > /dev/null; then echo "API is up"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::The API did not come up"; docker compose -f deploy/docker-compose.yml --env-file .env logs --tail 80 api; exit 1
+
+      - name: Load the frozen documents and test set
+        run: python3 benchmarks/frozen/bootstrap.py --base http://localhost:8081 --cli cli/target/glassbox-cli.jar --env-file "$GITHUB_ENV"
+
+      - name: Read the thresholds
+        run: |
+          echo "GATE_FAIL_UNDER=$(python3 -c "import json;print(json.load(open('benchmarks/frozen/gate.json'))['failUnder'])")" >> "$GITHUB_ENV"
+          echo "GATE_MODE=$(python3 -c "import json;print(json.load(open('benchmarks/frozen/gate.json'))['mode'])")" >> "$GITHUB_ENV"
+
+      - name: The gate on this code
+        uses: ./.github/actions/glassbox-gate
+        with:
+          server: http://localhost:8081
+          api-key: ${{ env.GLASSBOX_API_KEY }}
+          testset: ${{ env.GLASSBOX_TESTSET }}
+          config: benchmarks/frozen/config.json
+          mode: ${{ env.GATE_MODE }}
+          fail-under: ${{ env.GATE_FAIL_UNDER }}
+          cli-jar: cli/target/glassbox-cli.jar
+
+      # The proof that the gate can say no: a configuration known to be bad (one chunk, a 100-token budget) must exit with code 1, not 0 and not 2.
+      - name: Negative control, a deliberately bad change must be blocked
+        if: always()
+        env:
+          GLASSBOX_SERVER: http://localhost:8081
+        run: |
+          set +e
+          java -jar cli/target/glassbox-cli.jar run --testset "$GLASSBOX_TESTSET" --config benchmarks/frozen/bad-config.json --mode "$GATE_MODE" \
+            --fail-under "$GATE_FAIL_UNDER" --name "negative control" --markdown negative-control.md
+          code=$?
+          cat negative-control.md
+          if [ "$code" -ne 1 ]; then echo "::error::The deliberately bad change was not blocked (exit code $code): the gate is broken"; exit 1; fi
+          echo "The bad change was blocked, as it must be."
+
+      - name: Stack logs if something failed
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml --env-file .env logs --tail 120
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f deploy/docker-compose.yml --env-file .env down -v

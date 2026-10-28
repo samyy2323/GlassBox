@@ -61,13 +61,21 @@ public class Tx {
     }
 
     private <T> T run(UUID ws, UUID user, boolean worker, Function<JdbcTemplate, T> work) {
-        return tt.execute(status -> {
-            jdbc.queryForObject("SELECT set_config('app.worker', ?, true)", String.class, worker ? "on" : "");
-            jdbc.queryForObject("SELECT set_config('app.workspace_id', ?, true)", String.class,
-                    ws == null ? "" : ws.toString());
-            jdbc.queryForObject("SELECT set_config('app.user_id', ?, true)", String.class,
-                    user == null ? "" : user.toString());
-            return work.apply(jdbc);
-        });
+        // Every log line written while tenant work runs carries the workspace it ran for (SPEC 14). This is the one place the workspace is known to be the verified one.
+        String previous = org.slf4j.MDC.get("workspace_id");
+        if (ws != null) org.slf4j.MDC.put("workspace_id", ws.toString());
+        try {
+            return tt.execute(status -> {
+                jdbc.queryForObject("SELECT set_config('app.worker', ?, true)", String.class, worker ? "on" : "");
+                jdbc.queryForObject("SELECT set_config('app.workspace_id', ?, true)", String.class,
+                        ws == null ? "" : ws.toString());
+                jdbc.queryForObject("SELECT set_config('app.user_id', ?, true)", String.class,
+                        user == null ? "" : user.toString());
+                return work.apply(jdbc);
+            });
+        } finally {
+            if (previous == null) org.slf4j.MDC.remove("workspace_id");
+            else org.slf4j.MDC.put("workspace_id", previous);
+        }
     }
 }

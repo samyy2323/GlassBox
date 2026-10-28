@@ -44,6 +44,7 @@ public class ChatService {
     public record Options(Reranker.Type reranker, int topN, int tokenBudget) {}
 
     private final WorkspaceDefaults workspaceDefaults;
+    private final dev.glassbox.observability.LlmMetrics llmMetrics;
 
     private final RetrievalPipeline pipeline;
     private final PromptBuilder prompts;
@@ -61,7 +62,9 @@ public class ChatService {
                        AnswerSanitizer sanitizer, Tx tx, TraceService traces, TraceAssembler assembler,
                        @Value("${glassbox.embed.default-model}") String embeddingModel,
                        @Value("${glassbox.llm.temperature}") double temperature,
-                       @Value("${glassbox.llm.max-tokens}") int maxTokens, WorkspaceDefaults workspaceDefaults) {
+                       @Value("${glassbox.llm.max-tokens}") int maxTokens, WorkspaceDefaults workspaceDefaults,
+                       dev.glassbox.observability.LlmMetrics llmMetrics) {
+        this.llmMetrics = llmMetrics;
         this.workspaceDefaults = workspaceDefaults;
         this.pipeline = pipeline;
         this.prompts = prompts;
@@ -142,6 +145,7 @@ public class ChatService {
             done.put("answerTokens", TokenIndex.count(clean.text()));
             done.put("latencyMs", latencyMs);
             if (traceId != null) done.put("traceId", traceId);
+            if (promptTokens > 0) llmMetrics.record(workspaceId, llm.model(), promptTokens, TokenIndex.count(clean.text()));
             sink.send("done", done);
         } catch (LlmProvider.Cancelled cancelled) {
             log.debug("chat cancelled by client");

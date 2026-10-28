@@ -259,6 +259,13 @@ public class ExperimentService {
     }
 
     public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs, Integer questionLimit, Limits limits) {
+        return create(p, ws, testsetId, name, modeText, configs, questionLimit, limits, "MANUAL");
+    }
+
+    /** {@code kind} is MANUAL for a person's experiment and REGRESSION for one started by a gate or a document change. */
+    public ExperimentView create(Principal p, UUID ws, UUID testsetId, String name, String modeText, List<ConfigInput> configs, Integer questionLimit, Limits limits,
+                                 String kind) {
+        if (!kind.equals("MANUAL") && !kind.equals("REGRESSION")) throw new IllegalArgumentException("kind " + kind);
         if (limits.capUsd() != null && limits.capUsd() < 0 || limits.capCalls() != null && limits.capCalls() < 1) throw ApiException.badRequest("A cap must be positive");
         String mode = parseMode(modeText);
         checkLimit(questionLimit);
@@ -279,9 +286,9 @@ public class ExperimentService {
             if (limits.capCalls() != null && ((Number) estimate.get("llmCalls")).longValue() > limits.capCalls()) {
                 throw ApiException.conflict("This run is estimated at " + estimate.get("llmCalls") + " model calls, over its cap of " + limits.capCalls() + ".");
             }
-            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by, question_limit, cost_cap_usd, cost_cap_calls) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?) RETURNING id", UUID.class,
-                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimate), p.userId(), questionLimit, verdict.effectiveCapUsd(), limits.capCalls());
+            UUID id = j.queryForObject("INSERT INTO experiments (workspace_id, testset_id, name, mode, question_count, stale_count, estimated_cost, created_by, question_limit, cost_cap_usd, cost_cap_calls, kind) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?) RETURNING id", UUID.class,
+                    ws, testsetId, cleanName, mode, loaded.questions().size(), loaded.stale(), write(estimate), p.userId(), questionLimit, verdict.effectiveCapUsd(), limits.capCalls(), kind);
             String meta = write(runMeta(mode));
             for (int i = 0; i < validated.size(); i++) {
                 UUID configId = j.queryForObject("INSERT INTO pipeline_configs (workspace_id, config, config_hash) VALUES (?, ?::jsonb, ?) "

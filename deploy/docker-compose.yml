@@ -35,6 +35,8 @@ services:
       GLASSBOX_LLM_BASE_URL: ${GLASSBOX_LLM_BASE_URL:-http://host.docker.internal:11434}
       GLASSBOX_LLM_MODEL: ${GLASSBOX_LLM_MODEL:-llama3.2:3b}
       GLASSBOX_LLM_API_KEY: ${GLASSBOX_LLM_API_KEY:-}
+      # one JSON object per log line, carrying the trace id and the workspace id; set GLASSBOX_LOG_FORMAT=ecs for the Elastic Common Schema instead
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${GLASSBOX_LOG_FORMAT:-logstash}
       SPRING_PROFILES_ACTIVE: api
       GLASSBOX_STORAGE_DIR: /data/files
     extra_hosts:
@@ -88,6 +90,32 @@ services:
       - api
     ports:
       - "8080:8080"
+
+  # docker compose --profile observability up: Prometheus on :9090, Grafana on :3000 (admin password from GRAFANA_ADMIN_PASSWORD, default "admin": change it).
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
 
 volumes:
   pgdata:

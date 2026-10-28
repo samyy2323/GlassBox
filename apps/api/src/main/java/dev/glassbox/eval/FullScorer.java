@@ -74,6 +74,11 @@ public class FullScorer {
         this.budgets = budgets;
     }
 
+    /** The answering model, for the usage metrics of the caller. */
+    public String model() {
+        return llm.model();
+    }
+
     public Scored score(UUID ws, MeasurableQuestions.Question q, RetrievalPipeline.Result result, Runnable alive) {
         long started = System.nanoTime();
         List<Span> spans = new ArrayList<>(result.spans());

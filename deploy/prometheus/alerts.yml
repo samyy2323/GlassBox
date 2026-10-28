@@ -1,0 +1,40 @@
+groups:
+  - name: glassbox
+    rules:
+      - alert: IngestQueueBacklog
+        expr: max(ingest_queue_depth) > 50
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 50 jobs have been waiting for 10 minutes"
+          description: "The worker is down, stuck or too slow for the load. Look at job_retries_total and the worker logs."
+      - alert: ApiDown
+        expr: up{job="glassbox-api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "The API has not answered a scrape for 2 minutes"
+      - alert: WorkerDown
+        expr: up{job="glassbox-worker"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "The worker has not answered a scrape for 5 minutes"
+      - alert: RlsContextMissing
+        expr: increase(rls_context_missing_total[15m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "A query ran without a tenant context"
+          description: "The database returned nothing (it fails closed), but code reached it without setting the workspace. This is a bug to fix, not noise."
+      - alert: JobRetriesHigh
+        expr: rate(job_retries_total[10m]) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Jobs are being retried more than once every five seconds"
+      - alert: ServerErrors
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of API requests fail with a 5xx for 10 minutes"

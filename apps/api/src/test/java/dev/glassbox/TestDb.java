@@ -23,6 +23,8 @@ public final class TestDb {
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     static {
+        // every distinct Spring test context keeps its own connection pool for the rest of the run; the default of 100 connections runs out with a few dozen contexts
+        PG.setCommand("postgres", "-c", "max_connections=500");
         PG.start();
         try (Connection c = DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword());
              Statement s = c.createStatement()) {

@@ -34,9 +34,12 @@ public class RetrievalPipeline {
     private final ContextBuilder contextBuilder;
     private final ParentExpander parents;
     private final Transformers transformers;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
     public RetrievalPipeline(ChunkingResolver chunkings, EmbeddingProviders embeddings, HybridRetriever retriever,
-                             Rerankers rerankers, ContextBuilder contextBuilder, ParentExpander parents, Transformers transformers) {
+                             Rerankers rerankers, ContextBuilder contextBuilder, ParentExpander parents, Transformers transformers,
+                             io.micrometer.core.instrument.MeterRegistry metrics) {
+        this.metrics = metrics;
         this.parents = parents;
         this.transformers = transformers;
         this.chunkings = chunkings;
@@ -55,6 +58,8 @@ public class RetrievalPipeline {
         List<Span> spans = new ArrayList<>() {
             @Override
             public boolean add(Span s) {
+                io.micrometer.core.instrument.Timer.builder("retrieval_stage_duration").tag("stage", s.stage()).publishPercentileHistogram().register(metrics)
+                        .record(java.time.Duration.ofMillis(s.millis()));
                 onSpan.accept(s);
                 return super.add(s);
             }

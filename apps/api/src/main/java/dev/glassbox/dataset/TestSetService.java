@@ -346,6 +346,151 @@ public class TestSetService {
         });
     }
 
+    // ------------------------------------------------------------------ export and import (JSON lines)
+
+    public record Skipped(int line, String question, String reason) {}
+
+    public record ImportResult(TestSet testset, int imported, List<Skipped> skipped) {}
+
+    static final int MAX_IMPORT_BYTES = 8 * 1024 * 1024;
+
+    /**
+     * The accepted and edited questions of a set as JSON lines: one header, then one line per question. Evidence carries the title of the document and the quoted text
+     * instead of ids, so the file can be committed next to the documents and loaded into any workspace that holds them (the frozen test set of a CI gate).
+     */
+    public String exportJsonl(Principal p, UUID ws, UUID setId) {
+        return tx.workspace(ws, p.userId(), j -> {
+            require(j, p, ws, Role.VIEWER);
+            TestSet set = load(j, setId);
+            List<Question> questions = hydrate(j, j.query("SELECT " + Q_COLS + " FROM test_questions WHERE testset_id = ? AND review_status IN ('ACCEPTED', 'EDITED') ORDER BY seq", RAW, setId));
+            StringBuilder out = new StringBuilder();
+            var header = json.createObjectNode();
+            header.put("format", "glassbox-testset");
+            header.put("version", 1);
+            header.put("name", set.name());
+            header.put("testsetVersion", set.version());
+            header.put("questions", questions.size());
+            out.append(header).append('\n');
+            for (Question q : questions) {
+                var line = json.createObjectNode();
+                line.put("stableId", q.stableId().toString());
+                line.put("question", q.question());
+                line.put("expectedAnswer", q.expectedAnswer());
+                line.put("qtype", q.qtype());
+                line.put("origin", q.origin());
+                var evidence = line.putArray("evidence");
+                for (Evidence e : q.evidence()) {
+                    evidence.addObject().put("document", e.title()).put("text", e.text()).put("charStart", e.charStart()).put("charEnd", e.charEnd());
+                }
+                out.append(line).append('\n');
+            }
+            return out.toString();
+        });
+    }
+
+    /**
+     * Reads a file made by {@link #exportJsonl} into a new test set. Each piece of evidence is found again in the current text of the document with that title (the same
+     * matching as a replaced document: exact, then the same words with other spacing, then a passage that shares at least 75% of its words). A question whose evidence
+     * cannot be found is left out and reported, never kept with a guess. With {@code finalize} the new set is final, ready to be measured.
+     */
+    public ImportResult importJsonl(Principal p, UUID ws, String name, String jsonl, boolean finalize) {
+        if (jsonl == null || jsonl.isBlank()) throw ApiException.badRequest("The file is empty");
+        if (jsonl.length() > MAX_IMPORT_BYTES) throw ApiException.tooLarge("The file is larger than 8 MB");
+        String[] lines = jsonl.split("\\R");
+        com.fasterxml.jackson.databind.JsonNode header = null;
+        List<com.fasterxml.jackson.databind.JsonNode> items = new ArrayList<>();
+        List<Integer> numbers = new ArrayList<>();
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].isBlank()) continue;
+            com.fasterxml.jackson.databind.JsonNode node;
+            try {
+                node = json.readTree(lines[i]);
+            } catch (Exception e) {
+                throw ApiException.badRequest("Line " + (i + 1) + " is not valid JSON");
+            }
+            if (!node.isObject()) throw ApiException.badRequest("Line " + (i + 1) + " is not a JSON object");
+            if (header == null && node.has("format")) {
+                if (!"glassbox-testset".equals(node.path("format").asText()) || node.path("version").asInt() != 1) throw ApiException.badRequest("This is not a Glassbox test set file (format 1)");
+                header = node;
+            } else {
+                items.add(node);
+                numbers.add(i + 1);
+            }
+        }
+        String cleanName = (name != null && !name.isBlank() ? name : header == null ? "" : header.path("name").asText("")).strip();
+        if (cleanName.isEmpty() || cleanName.length() > 120) throw ApiException.badRequest("A test set needs a name of 1 to 120 characters");
+        if (items.isEmpty()) throw ApiException.badRequest("The file has no questions");
+        if (items.size() > MAX_QUESTIONS * 5) throw ApiException.badRequest("The file has more than " + MAX_QUESTIONS * 5 + " questions");
+
+        UUID setId = tx.workspace(ws, p.userId(), j -> {
+            require(j, p, ws, Role.EDITOR);
+            if (!j.queryForList("SELECT 1 FROM testsets WHERE name = ?", cleanName).isEmpty()) {
+                throw ApiException.conflict("A test set named \"" + cleanName + "\" already exists. Choose another name, or import into a new version of it.");
+            }
+            UUID id = j.queryForObject("INSERT INTO testsets (workspace_id, name, status, params, target_count, generated_count, created_by) VALUES (?, ?, 'DRAFT', ?::jsonb, ?, ?, ?) RETURNING id",
+                    UUID.class, ws, cleanName, "{\"imported\":true}", items.size(), items.size(), p.userId());
+            audit(j, ws, p.actor(), "testset.import", "testset:" + id);
+            return id;
+        });
+
+        List<Skipped> skipped = new ArrayList<>();
+        int imported = 0;
+        for (int i = 0; i < items.size(); i++) {
+            var n = items.get(i);
+            int lineNo = numbers.get(i);
+            String question = n.path("question").asText("").strip();
+            try {
+                String qtype = n.path("qtype").asText("");
+                if (!MANUAL_TYPES.contains(qtype)) throw new IllegalArgumentException("qtype must be one of " + MANUAL_TYPES);
+                String origin = n.path("origin").asText("MANUAL").equals("FEEDBACK") ? "FEEDBACK" : "MANUAL";
+                UUID stable = null;
+                try {
+                    stable = n.hasNonNull("stableId") ? UUID.fromString(n.get("stableId").asText()) : null;
+                } catch (IllegalArgumentException ignored) {
+                    // an id that is not a UUID is simply not reused
+                }
+                final UUID stableId = stable;
+                String q = cleanText(question, "question", 600);
+                String a = cleanText(n.path("expectedAnswer").asText(""), "expectedAnswer", 2000);
+                var evidence = n.path("evidence");
+                tx.workspace(ws, p.userId(), j -> {
+                    List<GoldSpan> spans = new ArrayList<>();
+                    for (var e : evidence) spans.add(findEvidence(j, e));
+                    if (spans.isEmpty() && !qtype.equals("UNANSWERABLE")) throw new IllegalArgumentException("the question has no evidence");
+                    j.update("INSERT INTO test_questions (workspace_id, testset_id, stable_id, question, expected_answer, gold_chunk_spans, qtype, origin, review_status) "
+                            + "VALUES (?, ?, coalesce(?, gen_random_uuid()), ?, ?, ?::jsonb, ?, ?, 'ACCEPTED')", ws, setId, stableId, q, a, writeSpans(spans), qtype, origin);
+                    return null;
+                });
+                imported++;
+            } catch (IllegalArgumentException | ApiException e) {
+                skipped.add(new Skipped(lineNo, question.length() > 120 ? question.substring(0, 120) + "..." : question, e.getMessage()));
+            }
+        }
+        if (imported == 0) throw ApiException.unprocessable("None of the " + items.size() + " questions could be imported. First reason: " + skipped.get(0).reason());
+        final int total = imported;
+        tx.workspace(ws, p.userId(), j -> j.update("UPDATE testsets SET target_count = ?, generated_count = ? WHERE id = ?", total, total, setId));
+        TestSet result = finalize ? finalizeSet(p, ws, setId, false) : tx.workspace(ws, p.userId(), j -> load(j, setId));
+        return new ImportResult(result, imported, skipped);
+    }
+
+    /** Finds a quoted passage again in the current text of the document with the given title; it may have moved, been re-spaced or lightly reworded since it was exported. */
+    private GoldSpan findEvidence(JdbcTemplate j, com.fasterxml.jackson.databind.JsonNode e) {
+        String title = e.path("document").asText("");
+        String quoted = e.path("text").asText("");
+        if (quoted.endsWith("...")) quoted = quoted.substring(0, quoted.length() - 3);
+        if (title.isBlank() || quoted.isBlank()) throw new IllegalArgumentException("evidence needs a document title and its text");
+        var docs = j.queryForList("SELECT d.id, v.id AS version_id, v.normalized_text FROM documents d JOIN document_versions v ON v.document_id = d.id AND v.version = d.version "
+                + "WHERE d.status = 'READY' AND d.title = ? ORDER BY d.created_at LIMIT 1", title);
+        if (docs.isEmpty() || docs.get(0).get("normalized_text") == null) throw new IllegalArgumentException("no document titled \"" + title + "\" is ready in this workspace");
+        String text = (String) docs.get(0).get("normalized_text");
+        int hint = Math.max(0, Math.min(e.path("charStart").asInt(0), text.length()));
+        String padded = " ".repeat(hint) + quoted; // lets the match prefer the occurrence nearest to where the passage used to be
+        var found = dev.glassbox.documents.SpanRelocator.relocate(padded, text, hint, hint + quoted.length());
+        if (found.isEmpty()) throw new IllegalArgumentException("the evidence passage was not found in \"" + title + "\"");
+        return new GoldSpan((UUID) docs.get(0).get("id"), (UUID) docs.get(0).get("version_id"), found.get().start(), found.get().end(),
+                GoldSpan.snippet(text, found.get().start(), found.get().end()));
+    }
+
     /** What changed in {@code setId} compared with {@code against}: questions are matched by stable id, rejected ones are ignored. */
     public Diff diff(Principal p, UUID ws, UUID setId, UUID against) {
         return tx.workspace(ws, p.userId(), j -> {

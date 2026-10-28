@@ -1,0 +1,153 @@
+name: Glassbox quality gate
+description: >
+  Measure a RAG pipeline configuration on a frozen test set, fail the job when it is worse than the rules allow (a metric below its minimum, or a drop against a
+  baseline that is both larger than allowed and statistically significant), and keep one comment on the pull request up to date with the result table.
+
+inputs:
+  server:
+    description: Address of the Glassbox server, like https://glassbox.example.com
+    required: true
+  api-key:
+    description: An API key with the run scope. Pass it from a secret.
+    required: true
+  testset:
+    description: Id of the final test set to measure on
+    required: true
+  config:
+    description: Path to a JSON file with the pipeline configuration to measure (default is the server's own defaults)
+    default: ""
+  mode:
+    description: retrieval (no model calls) or full (answers are generated and judged)
+    default: retrieval
+  fail-under:
+    description: "Minimums, comma separated, like recall@5=0.85,mrr=0.8"
+    default: ""
+  baseline:
+    description: Id of a finished run on the same test set to compare against
+    default: ""
+  fail-on-regression:
+    description: Fail when a metric dropped against the baseline by more than max-drop and the drop is significant
+    default: "false"
+  max-drop:
+    description: Largest allowed drop as a fraction (0.02 is 2 points)
+    default: "0.02"
+  strict:
+    description: Judge the minimums by the lower end of the 95% interval
+    default: "false"
+  name:
+    description: Label of the run (default is the pull request number)
+    default: ""
+  comment:
+    description: Post the result on the pull request
+    default: "true"
+  cli-jar:
+    description: Path to glassbox-cli.jar. When empty the CLI is built from the cli/ folder of this repository.
+    default: ""
+  github-token:
+    description: Token used to write the comment
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: "0 passed, 1 the gate failed, 2 an error"
+    value: ${{ steps.gate.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+
+    # Every input reaches a script only through an environment variable, never by being pasted into the script text.
+    - name: Get the CLI
+      shell: bash
+      env:
+        CLI_JAR: ${{ inputs.cli-jar }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [ -z "$CLI_JAR" ]; then
+          cli_dir="$ACTION_PATH/../../../cli"
+          (cd "$cli_dir" && ./mvnw -B -q -DskipTests package)
+          CLI_JAR="$cli_dir/target/glassbox-cli.jar"
+        fi
+        echo "GLASSBOX_CLI_JAR=$CLI_JAR" >> "$GITHUB_ENV"
+
+    - name: Run the gate
+      id: gate
+      shell: bash
+      env:
+        GLASSBOX_SERVER: ${{ inputs.server }}
+        GLASSBOX_API_KEY: ${{ inputs.api-key }}
+        TESTSET: ${{ inputs.testset }}
+        CONFIG: ${{ inputs.config }}
+        MODE: ${{ inputs.mode }}
+        FAIL_UNDER: ${{ inputs.fail-under }}
+        BASELINE: ${{ inputs.baseline }}
+        FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
+        MAX_DROP: ${{ inputs.max-drop }}
+        STRICT: ${{ inputs.strict }}
+        RUN_NAME: ${{ inputs.name }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        name="$RUN_NAME"
+        if [ -z "$name" ]; then
+          if [ -n "$PR_NUMBER" ]; then name="PR $PR_NUMBER"; else name="${GITHUB_REF_NAME:-CI}"; fi
+        fi
+        args=(run --testset "$TESTSET" --mode "$MODE" --name "$name" --markdown glassbox-gate.md --junit glassbox-gate.xml --format md)
+        if [ -n "$CONFIG" ]; then args+=(--config "$CONFIG"); fi
+        if [ -n "$BASELINE" ]; then args+=(--baseline "$BASELINE"); fi
+        if [ -n "$FAIL_UNDER" ]; then args+=(--fail-under "$FAIL_UNDER"); fi
+        if [ "$FAIL_ON_REGRESSION" = "true" ]; then args+=(--fail-on-regression --max-drop "$MAX_DROP"); fi
+        if [ "$STRICT" = "true" ]; then args+=(--strict); fi
+        set +e
+        java -jar "$GLASSBOX_CLI_JAR" "${args[@]}"
+        code=$?
+        set -e
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Keep the results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: glassbox-gate
+        path: |
+          glassbox-gate.md
+          glassbox-gate.xml
+        if-no-files-found: ignore
+
+    # One comment per pull request, edited in place on every push. A fork's token cannot write, so a failure to comment never decides the result.
+    - name: Comment on the pull request
+      if: always() && inputs.comment == 'true' && github.event_name == 'pull_request'
+      continue-on-error: true
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- glassbox-quality-gate -->';
+          const file = 'glassbox-gate.md';
+          const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '### Glassbox quality gate: no result\n\nThe gate could not be run. See the job log.';
+          const body = marker + '\n' + text;
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+          const mine = comments.find(c => c.body && c.body.startsWith(marker) && c.user && c.user.type === 'Bot');
+          if (mine) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Pass or fail the job with the gate
+      shell: bash
+      env:
+        CODE: ${{ steps.gate.outputs.exit-code }}
+      run: |
+        case "$CODE" in
+          0) echo "The Glassbox quality gate passed." ;;
+          1) echo "::error::The Glassbox quality gate failed: see the table above or the pull request comment." ;;
+          *) echo "::error::The Glassbox quality gate could not be run (exit code $CODE)." ;;
+        esac
+        exit "${CODE:-2}"

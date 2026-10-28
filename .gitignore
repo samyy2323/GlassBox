@@ -6,6 +6,9 @@
 
 # api
 apps/api/target/
+
+# cli
+cli/target/
 *.class
 
 # web

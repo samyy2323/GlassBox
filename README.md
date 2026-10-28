@@ -10,7 +10,7 @@ Multi-tenant RAG evaluation and auto-tuning platform: upload documents, generate
 | P1 Ingest, retrieve, chat: queue, parsers, chunkers, embeddings, hybrid search, rerank, streaming cited answers | done |
 | P2 X-Ray trace viewer, test sets, review queue | done |
 | P3 Eval Lab: experiments, metrics, confidence intervals and significance tests, claim verification, judge calibration | done |
-| P6 Hardening, CLI, CI gate, observability | in progress: isolation canaries, injection suite, request limits, audit log, upload guard done (see the P6 run below); CLI, gate API, metrics and docs to do |
+| P6 Hardening, CLI, CI gate, observability | built and tested; the gate blocks a deliberately bad change on the live stack (see the P6 runs below); the GitHub Action and gate workflow have not yet run on GitHub |
 | P5 Feedback loop, document change impact, query transformers, cost control, reports | built, tested and run once on the live stack with `llama3.2:3b` (see the P5 run below) |
 | P4 AutoTune with a held-out split, failure diagnosis, UNANSWERABLE questions, parent_child chunker | built and measured; the acceptance check is **not met** on quality (see the P4 run below) |
 
@@ -78,12 +78,25 @@ Open http://localhost:8080, create an account, upload a few documents on the Doc
 
 The first build downloads Maven and Python dependencies and the embedding models, which can take a long time on a slow connection.
 
+**Metrics, logs and API description.** Logs are JSON, one object per line, with `traceId` and `workspace_id`. Metrics are on `http://localhost:8081/actuator/prometheus`; `docker compose -f deploy/docker-compose.yml --env-file .env --profile observability up` also starts Prometheus (:9090, with the alert rules in `deploy/prometheus`) and Grafana (:3000, dashboard "Glassbox", admin password `GRAFANA_ADMIN_PASSWORD`, default `admin`: change it). The API is described at `/api/docs/openapi` (sign in first). Keep port 8081 off the internet.
+
+**Gate a change from the command line.** Build the client once, make an API key with the `run` scope in the app, and run the gate:
+
+```bash
+(cd cli && ./mvnw -B package)                          # cli/target/glassbox-cli.jar
+export GLASSBOX_SERVER=http://localhost:8080 GLASSBOX_API_KEY=gb_...      # or: java -jar ... login --server ... --key ...
+java -jar cli/target/glassbox-cli.jar testset import benchmarks/frozen/testset.jsonl --finalize   # after uploading benchmarks/frozen/docs
+java -jar cli/target/glassbox-cli.jar run --testset <id> --config config.json --fail-under recall@5=0.93,mrr=0.9
+echo $?                                                # 0 passed, 1 the gate failed, 2 error
+```
+
 ## Test it
 
 Needs JDK 21 and Docker (Testcontainers starts a real pgvector Postgres):
 
 ```bash
-cd apps/api && ./mvnw verify      # 421 tests: isolation, queue concurrency, chunker properties, retrieval SQL, chat, traces, test sets, statistics against SciPy fixtures, experiments, calibration, indexing, failure classifier, AutoTune, transformers, budgets, feedback, document changes, reports
+cd apps/api && ./mvnw verify      # 443 tests: isolation (tables, definer functions, canaries end to end), prompt-injection suite, request limits, audit, upload guard, headers and CORS, metrics and OpenAPI, the CI gate, queue concurrency, chunker properties, retrieval SQL, chat, traces, test sets, statistics against SciPy fixtures, experiments, calibration, indexing, failure classifier, AutoTune, transformers, budgets, feedback, document changes, reports
+cd cli && ./mvnw verify           # 16 tests: the command line client against a stand-in server, exit codes, files written, what is sent
 cd apps/web && npm ci && npm test # 128 tests: SSE parser, highlighting, review shortcuts, selection offsets, forest plot and heatmap layout, calibration queue, AutoTune and failure report layout, the pages rendered from a real API response, the budget, feedback, change and report pages; also npm run lint and npm run build
 cd apps/ml-sidecar && pip install -r requirements-dev.txt && python -m pytest
 python benchmarks/stats_fixtures.py   # regenerates the SciPy reference values the Java statistics are checked against
@@ -213,6 +226,28 @@ What this shows, and what it does not:
 
 The deterministic layer (`InjectionSuiteTest`, in the build) runs the same 30 attacks against a fake model that obeys every one of them, and asserts the structure around it: one intact fence, no active content in any final answer, no other workspace's text in the prompt. Switching off the fence neutralising or the URL stripping makes it fail. Details: [ADR 0010](docs/adr/0010-hardening-rate-limits-audit-uploads-injection.md).
 
+### P6 acceptance: the quality gate blocks a deliberately bad change
+
+`python benchmarks/gate_demo.py` drives the real CLI jar against the live stack, on the P4 benchmark (twelve site handbooks, a test set of 77 measurable questions, hybrid search, retrieval only, no model calls so it runs in seconds). An API key with the `run` scope, nothing else.
+
+```
+glassbox run --testset ... --config good.json --fail-under context_recall=0.8,mrr=0.6          exit 0
+glassbox run --testset ... --config bad.json  --baseline <run of good.json> --fail-on-regression              --fail-under context_recall=0.8 --regression-metric context_recall,mrr             exit 1
+```
+
+| Bad change (one chunk in the prompt, a 100-token budget) against the good run | Value (95% CI) | Against | Result |
+|---|---|---|---|
+| context_recall is at least 80% | 42.2% [32.5%, 52.6%] | at least 80.0% | **FAIL** |
+| context_recall drops by no more than 2 points (significant at p<0.05) | 42.2% | baseline 98.7%, p<0.001 | **FAIL**: dropped 56.5 points, significant |
+| mrr drops by no more than 2 points | 96.4% | baseline 96.4%, p=1.000 | pass: no drop |
+
+The good configuration passed (context_recall 98.7% [96.8%, 100%], mrr 96.4% [92.5%, 99.4%]). The same table is written as Markdown for the pull request comment and as JUnit XML (one test case per check). A call with no rules, and a call with a wrong key, exit 2 with one line saying what to fix.
+
+What the gate is, and is not:
+- It fails on a drop only when the drop is **both** larger than the allowed amount **and** statistically significant (the Eval Lab's paired test). A 6-point drop with p=0.30 is reported and does not block ([ADR 0010](docs/adr/0010-hardening-rate-limits-audit-uploads-injection.md)); the unit tests cover the whole decision table.
+- MRR did not move with the bad change because the token budget and the number of chunks act after ranking. The gate blocks what regressed, not everything that changed.
+- **The GitHub Action and the workflow that gates this repository (`.github/workflows/gate.yml`) are written and their files parse, but GitHub has not run them yet.** What has run is the CLI they call, the bootstrap script (`benchmarks/frozen/bootstrap.py`: 12 documents and all 81 frozen questions loaded into a fresh workspace), and the thresholds measured with it (recall@5 and context_recall 97.5%, MRR 95.8%, context_pass 94.9%; minimums in `benchmarks/frozen/gate.json` are set a few points under, because the same run repeated gives identical numbers). The workflow also runs a deliberately bad configuration that must exit 1, so a gate that has stopped working fails the build.
+
 ## Limitations (so far)
 
 - Answers from a small local model sometimes omit a citation; claim-level verification arrives in P3.
@@ -222,4 +257,5 @@ The deterministic layer (`InjectionSuiteTest`, in the build) runs the same 30 at
 - Eval Lab: the judge is the model that writes the answers. Claim checking uses a small NLI model that over-trusts word overlap and under-trusts paraphrase. The sample labels in the acceptance run were not given by a person. Experiment answer traces are kept for the trace retention period (30 days), after which their X-Ray links stop opening.
 - AutoTune: the search space leaves out query transformers and the generation model (P5). The held-out part is small on a small test set, so only large differences can be confirmed; the page says how large. Candidate labels show chunking, model, retrieval and top n but not the candidate count or budget, so two finalists can look identical in the table. The full-answer stage has been run only against the fake models in tests, not on the local model. The held-out check ignores unanswerable questions unless the full stage is on. Only an owner can promote.
 - P5: the feedback inbox classifies from a stored trace, so it can say where the pipeline lost a passage but not whether the answer was wrong; that is left to the person. Gold spans are re-located by text, so a document that was reorganised and reworded is mostly marked stale and goes back to review. The regression run measures retrieval only. `rewrite` is not implemented (chat has no history). The cache covers transformer calls but not judge or claim-check calls. AutoTune has no dollar cap. Reports hold numbers, not charts of every metric. Each feature was run once on the live stack (see the P5 run above), but the pages were not looked at in a browser, and the 120% stop was only exercised by tests.
+- P6: the injection numbers come from a 3B local model and 30 string-matched attacks; a hosted model, a larger suite or a subtler manipulation (a confidently wrong number) would give different results, and in-tenant users can still write documents that change answers. Request limits are counted in memory per API process, so several nodes would each allow the full rate. Provider API keys are not stored by any feature yet, so the AES-GCM encryption in the SPEC is not built. The audit log pages by timestamp, so rows written in the same transaction share one. The per-request log line carries `workspace_id` for signed-in users who sent the header, not for API keys (lines written inside tenant work do). The gate compares a pull request with absolute minimums, not with the base branch measured in the same job. The GitHub Action and gate workflow have not run on GitHub yet; the first run will show whether the stack starts in a runner in the time allowed.
 - Test sets: unanswerable questions are generated around a passage and flagged when a model can answer them from what the search finds, but the check is the same 3B model, so a person should review them; the answerability judge is lexical, not a model judge (P3); quality flags are not recomputed when a reviewer edits a question; generation uses the chat model (a separate generator model is not configurable yet).

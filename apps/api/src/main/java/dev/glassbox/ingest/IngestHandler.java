@@ -38,7 +38,8 @@ public class IngestHandler implements JobHandler {
 
     public IngestHandler(Tx tx, EmbeddingService embeddings, EmbeddingProviders providers, DocumentStorage storage, DocumentIndexer indexer,
                          WorkspaceDefaults workspaceDefaults, JobQueue jobs, com.fasterxml.jackson.databind.ObjectMapper mapper,
-                         @Value("${glassbox.ingest.chunk-size}") int chunkSize) {
+                         @Value("${glassbox.ingest.chunk-size}") int chunkSize, io.micrometer.core.instrument.MeterRegistry metrics) {
+        this.duration = io.micrometer.core.instrument.Timer.builder("ingest_duration").publishPercentileHistogram().register(metrics);
         this.workspaceDefaults = workspaceDefaults;
         this.jobs = jobs;
         this.mapper = mapper;
@@ -55,8 +56,19 @@ public class IngestHandler implements JobHandler {
         return TYPE;
     }
 
+    private final io.micrometer.core.instrument.Timer duration;
+
     @Override
     public void handle(Job job) throws Exception {
+        io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start();
+        try {
+            process(job);
+        } finally {
+            sample.stop(duration);
+        }
+    }
+
+    private void process(Job job) throws Exception {
         UUID ws = job.workspaceId();
         UUID docId = UUID.fromString(job.payload().get("documentId").asText());
         int version = job.payload().get("version").asInt();
