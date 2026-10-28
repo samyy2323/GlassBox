@@ -193,6 +193,9 @@ public class DocumentService {
     String sniff(String filename, byte[] data) {
         if (data.length == 0) throw ApiException.badRequest("Empty file");
         if (data.length > maxBytes) throw ApiException.tooLarge("File exceeds the 25 MB limit");
+        dev.glassbox.parse.ArchiveGuard.problem(data).ifPresent(why -> {
+            throw ApiException.unprocessable("This file was refused: " + why);
+        });
         try {
             return FileTypes.classify(filename, data).orElseThrow(() -> ApiException.unsupportedMediaType(
                     "Glassbox could not recognise this file as text, a document, a spreadsheet, a presentation, an e-book or a data file."));

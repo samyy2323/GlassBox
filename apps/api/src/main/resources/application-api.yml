@@ -3,3 +3,6 @@ spring:
     enabled: true           # SPEC 14: Flyway runs at API startup only
 server:
   port: 8080
+  # Behind the web container's nginx the client address is in X-Forwarded-For; Tomcat honours it only from private-range proxies, so a caller on the open
+  # internet cannot choose the address the sign-in limit is counted against.
+  forward-headers-strategy: native

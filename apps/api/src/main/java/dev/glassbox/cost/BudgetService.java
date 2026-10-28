@@ -28,6 +28,9 @@ public class BudgetService {
     public record Overview(Budget budget, double spentThisMonthUsd, long tokensThisMonth, List<ModelPrice> prices, ModelPrice defaults, List<Entry> recent, Double tokenError, int measuredRuns) {}
 
     private final Tx tx;
+    /** Experiments and AutoTune searches of one workspace that may be queued or running at once (SPEC 12). */
+    @Value("${glassbox.limits.max-active-runs:3}")
+    private int maxActiveRuns = 3;
     private final double defaultPrompt, defaultCompletion;
 
     public BudgetService(Tx tx, @Value("${glassbox.cost.prompt-usd-per-million}") double defaultPrompt, @Value("${glassbox.cost.completion-usd-per-million}") double defaultCompletion) {
@@ -128,6 +131,7 @@ public class BudgetService {
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.OWNER);
             j.update("DELETE FROM pricing WHERE model = ?", model);
+            audit(j, ws, p.actor(), "pricing.delete", "model:" + model);
             return prices(j);
         });
     }
@@ -157,6 +161,20 @@ public class BudgetService {
             throw ApiException.conflict(String.format("This run is estimated at $%.2f, above the $%.2f that needs confirmation. Confirm to start it.", estimatedUsd, b.confirmAboveUsd()));
         }
         return new Verdict(needs, cap, spent, b.monthlyUsd());
+    }
+
+    /**
+     * Refuses a new experiment or AutoTune search while the workspace already has {@code max-active-runs} of them queued or running, so one tenant cannot fill the
+     * worker queue. Counts under the caller's row-level security, so it sees only this workspace's runs.
+     */
+    public void checkConcurrency(JdbcTemplate j) {
+        if (maxActiveRuns < 1) return;
+        int active = j.queryForObject("SELECT (SELECT count(*) FROM experiments WHERE status IN ('QUEUED', 'RUNNING')) "
+                + "+ (SELECT count(*) FROM autotunes WHERE status IN ('QUEUED', 'RUNNING'))", Integer.class);
+        if (active >= maxActiveRuns) {
+            throw ApiException.conflict("This workspace already has " + active + " experiments or AutoTune searches queued or running, the most allowed at once is "
+                    + maxActiveRuns + ". Wait for one to finish, or cancel one.");
+        }
     }
 
     /** Whether an estimate would need confirmation, for showing it before the user asks to start (no refusal). */

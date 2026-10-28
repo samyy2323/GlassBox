@@ -197,6 +197,38 @@ class RlsIsolationTest {
     }
 
     @Test
+    void theAuditLogIsAppendOnlyForTheApplicationRole() throws SQLException {
+        for (String sql : List.of("UPDATE audit_log SET action = 'tampered'", "DELETE FROM audit_log", "TRUNCATE audit_log")) {
+            assertThatThrownBy(() -> inContext(WS_A, userA, c -> {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    return ps.executeUpdate();
+                }
+            })).as(sql).isInstanceOf(SQLException.class).hasMessageContaining("permission denied");
+        }
+    }
+
+    /** The reviewed SECURITY DEFINER functions: each runs with its owner's rights, so each is a way past RLS and is listed by hand. */
+    static final List<String> DEFINER_FUNCTIONS = List.of("auth_create_user", "auth_find_user", "public_report");
+
+    @Test
+    void everySecurityDefinerFunctionIsReviewedAndPinsItsSearchPath() throws SQLException {
+        List<String> found = new ArrayList<>();
+        List<String> unpinned = new ArrayList<>();
+        try (Connection c = TestDb.appConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT p.proname, p.proconfig::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                     + "WHERE n.nspname = 'public' AND p.prosecdef ORDER BY p.proname");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                found.add(rs.getString(1));
+                String config = rs.getString(2);
+                if (config == null || !config.contains("search_path")) unpinned.add(rs.getString(1));
+            }
+        }
+        assertThat(found).as("a new SECURITY DEFINER function must be reviewed and added to DEFINER_FUNCTIONS").containsExactlyElementsOf(DEFINER_FUNCTIONS);
+        assertThat(unpinned).as("a definer function without a pinned search_path can be hijacked through a schema the caller controls").isEmpty();
+    }
+
+    @Test
     void workspaceAseesNothingOfWorkspaceB() throws SQLException {
         for (String table : tenantTables()) {
             String col = tenantColumn(table);

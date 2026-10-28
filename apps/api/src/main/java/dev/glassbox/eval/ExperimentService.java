@@ -267,6 +267,7 @@ public class ExperimentService {
         List<PipelineConfig> validated = validate(configs);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.EDITOR);
+            budgets.checkConcurrency(j);
             if (!testsetStatus(j, testsetId).equals("FINAL")) throw ApiException.conflict("Only a final test set can be measured. Finalize it first.");
             MeasurableQuestions.Loaded loaded = MeasurableQuestions.load(j, json, testsetId, mode.equals("FULL"), questionLimit);
             if (loaded.questions().isEmpty()) throw ApiException.conflict("This test set has no accepted question with intact evidence to measure");

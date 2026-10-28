@@ -167,6 +167,7 @@ public class AutotuneService {
         Options o = options(r);
         return tx.workspace(ws, p.userId(), j -> {
             require(j, p, ws, Role.EDITOR);
+            budgets.checkConcurrency(j);
             testsetMustBeFinal(j, r.testsetId());
             Split s = split(j, r.testsetId(), o);
             if (s.tuningRetrieval() < 1 || s.heldOutRetrieval() < 1) {

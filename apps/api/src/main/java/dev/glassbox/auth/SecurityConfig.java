@@ -29,7 +29,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtService jwt, Tx tx) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, JwtService jwt, Tx tx, dev.glassbox.ratelimit.ApiRateLimitFilter rateLimit) throws Exception {
         http
             // Stateless bearer/API-key auth. The only cookie (refresh) is SameSite=Strict, path-scoped and
             // requires a custom header, so classic CSRF tokens are replaced by those three controls.
@@ -37,7 +37,12 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            .headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; frame-ancestors 'none'")))
+            .headers(h -> h
+                .contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; frame-ancestors 'none'"))
+                .referrerPolicy(r -> r.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                .permissionsPolicyHeader(p -> p.policy("camera=(), microphone=(), geolocation=(), payment=(), usb=()"))
+                // HSTS is sent on HTTPS requests only (Spring's default); TLS is terminated in front of the API in a deployment.
+                .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
             .authorizeHttpRequests(a -> a
                 // SSE completes on an ASYNC dispatch that has no auth context; the REQUEST dispatch was already checked.
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
@@ -47,7 +52,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/public/reports/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll())
-            .addFilterBefore(new AuthenticationFilter(jwt, tx), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(new AuthenticationFilter(jwt, tx), UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(rateLimit, AuthenticationFilter.class);
         return http.build();
     }
 

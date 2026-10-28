@@ -44,6 +44,8 @@ glassbox:
     dir: ${GLASSBOX_STORAGE_DIR:./data/files}
   limits:
     max-documents: 50
+    # experiments and AutoTune searches of one workspace that may be queued or running at once
+    max-active-runs: 3
     max-file-bytes: 26214400
   llm:
     # Any OpenAI-compatible chat endpoint: Ollama (default), Groq, OpenRouter, Gemini's compatible API, vLLM.
@@ -59,6 +61,13 @@ glassbox:
     max-concurrent: 1
     queue-wait: 2s
     rate-per-minute: 20
+  rate:
+    # Requests per minute per caller (token bucket; the burst is the same number). Chat has its own, tighter limit above.
+    principal-per-minute: 600     # one signed-in user or one API key
+    workspace-per-minute: 1200    # all API keys of one workspace together
+    auth-per-minute: 20           # sign-in, sign-up and refresh, per client address
+    public-per-minute: 60         # public report links, per client address
+    anonymous-per-minute: 120     # requests without a valid credential, per client address
   traces:
     retention-days: 30
   eval:
