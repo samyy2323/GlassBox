@@ -113,5 +113,5 @@ deliberately bad configuration that **must** exit 1; if it does not, the job fai
 ## Not done
 
 Rate-limit buckets are per process. The gate API does not yet put its result in the audit log beyond the start of the run. A baseline for the pull request's own gate would need the base branch
-built and measured in the same job; the frozen gate uses absolute minimums instead. The pull request action has been exercised through the CLI it wraps and the same commands in the
-workflow, not by GitHub itself until the workflow has run once on a pull request or by hand.
+built and measured in the same job; the frozen gate uses absolute minimums instead. The workflow ran green once on GitHub when started by hand (the stack started in the runner and the negative control was blocked); it has not run on a pull
+request, so the comment step is untested.
