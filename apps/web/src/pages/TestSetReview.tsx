@@ -15,7 +15,7 @@ import { addEvidence, FLAG_LABEL, percent, progressPercent, removeEvidence, repl
 import { useWorkspace } from '../lib/workspace'
 import { SetStatus } from './TestSets'
 
-const REVIEW_DOT: Record<ReviewStatus, string> = { PENDING: 'bg-warn', ACCEPTED: 'bg-ok', EDITED: 'bg-accent', REJECTED: 'bg-red-500' }
+const REVIEW_DOT: Record<ReviewStatus, string> = { PENDING: 'bg-warn', ACCEPTED: 'bg-ok', EDITED: 'bg-accent', REJECTED: 'bg-danger' }
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback)
 
 function Kbd({ children }: { children: string }) {
@@ -166,7 +166,7 @@ export default function TestSetReview() {
       <header className="space-y-3 border-b border-[var(--line)] px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/testsets" className="btn-ghost !px-2" aria-label="All test sets"><ChevronLeft className="h-4 w-4" /></Link>
-          <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight">{set.name}</h1>
+          <h1 className="min-w-0 truncate text-[1.6rem] leading-tight">{set.name}</h1>
           {siblings.length > 1 ? (
             <select className="input-glass !w-auto !py-1 text-sm" value={set.id} onChange={(e) => navigate(`/testsets/${e.target.value}/review`)} aria-label="Version">
               {siblings.map((v) => <option key={v.id} value={v.id}>Version {v.version} ({v.status.toLowerCase()})</option>)}
@@ -195,7 +195,7 @@ export default function TestSetReview() {
         <div className="flex flex-wrap items-center gap-2 text-xs" aria-label="Review progress">
           <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-ok" />{s.accepted + s.edited} accepted{s.edited > 0 ? ` (${s.edited} edited)` : ''}</span>
           <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-warn" />{s.pending} to review</span>
-          <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{s.rejected} rejected</span>
+          <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-danger" />{s.rejected} rejected</span>
           <span className="chip">Acceptance {percent(s.acceptanceRate)}</span>
           {Object.entries(s.byFlag).map(([f, n]) => <span key={f} className="chip" title={FLAG_LABEL[f as QualityFlag]?.hint}>{FLAG_LABEL[f as QualityFlag]?.label ?? f}: {n}</span>)}
           {notice && <span role="status" className="ml-auto text-accent">{notice}</span>}
@@ -207,7 +207,7 @@ export default function TestSetReview() {
             <p className="text-xs text-muted">Writing questions: {set.generatedCount} of {set.targetCount}. They appear below as they are written, and you can start reviewing now once the set is a draft.</p>
           </div>
         )}
-        {set.status === 'FAILED' && <p role="alert" className="text-sm text-red-500">{set.error ?? 'Generation failed.'}</p>}
+        {set.status === 'FAILED' && <p role="alert" className="text-sm text-danger">{set.error ?? 'Generation failed.'}</p>}
         {set.status === 'FINAL' && (
           <p className="flex items-center gap-2 text-xs text-muted"><Lock className="h-3.5 w-3.5" /> This version is final and cannot change. Create a new version to edit it; the old one stays exactly as it is.</p>
         )}
@@ -359,7 +359,7 @@ export default function TestSetReview() {
               {editable && !editing && (
                 <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-canvas/95 px-4 py-3 sm:-mx-6 sm:px-6">
                   <button className="btn-primary !bg-ok" onClick={() => decide('ACCEPTED')} disabled={patch.isPending}><Check className="h-4 w-4" /> Accept <Kbd>A</Kbd></button>
-                  <button className="btn-primary !bg-red-500" onClick={() => decide('REJECTED')} disabled={patch.isPending}><X className="h-4 w-4" /> Reject <Kbd>R</Kbd></button>
+                  <button className="btn-primary !bg-danger" onClick={() => decide('REJECTED')} disabled={patch.isPending}><X className="h-4 w-4" /> Reject <Kbd>R</Kbd></button>
                   <button className="btn-ghost" onClick={startEdit}><Pencil className="h-4 w-4" /> Edit <Kbd>E</Kbd></button>
                   {q.reviewStatus !== 'PENDING' && <button className="btn-ghost" onClick={() => decide('PENDING')}><RotateCcw className="h-4 w-4" /> Undo <Kbd>P</Kbd></button>}
                   <span className="ml-auto hidden text-xs text-muted sm:block">Next <Kbd>J</Kbd> Previous <Kbd>K</Kbd></span>
@@ -385,7 +385,7 @@ export default function TestSetReview() {
               Finalizing freezes version {set.version}: {s.accepted + s.edited} accepted question{s.accepted + s.edited === 1 ? '' : 's'} will be what experiments are measured on. To change it afterwards you create a new version.
             </p>
             {s.pending > 0 && <p className="rounded-xl bg-warn/10 px-3 py-2 text-warn">{s.pending} question{s.pending === 1 ? ' is' : 's are'} still pending. They will stay in this version but are not used for measuring.</p>}
-            {finalize.isError && <p role="alert" className="text-red-500">{errorText(finalize.error, 'Could not finalize.')}</p>}
+            {finalize.isError && <p role="alert" className="text-danger">{errorText(finalize.error, 'Could not finalize.')}</p>}
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" onClick={() => setDialog(null)}>Keep reviewing</button>
               <button className="btn-primary" onClick={() => finalize.mutate(s.pending > 0)} disabled={finalize.isPending}>

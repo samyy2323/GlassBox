@@ -15,7 +15,7 @@ import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
 import { ExperimentStatusChip } from './Experiments'
 
-const TONE_DOT = { good: 'bg-ok', bad: 'bg-red-500', none: 'bg-muted/50' } as const
+const TONE_DOT = { good: 'bg-ok', bad: 'bg-danger', none: 'bg-muted/50' } as const
 
 function rowFor(e: Experiment, runId: string, metric: string): ComparisonRow | undefined {
   return e.vsBaseline.find((c) => c.runId === runId)?.rows.find((r) => r.metric === metric)
@@ -23,9 +23,9 @@ function rowFor(e: Experiment, runId: string, metric: string): ComparisonRow | u
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="glass space-y-3 rounded-2xl p-5">
+    <section className="card space-y-3">
       <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="eyebrow !text-fg">{title}</h2>
         {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       </div>
       {children}
@@ -245,7 +245,7 @@ export default function ExperimentDetail() {
         <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/experiments" className="btn-ghost !px-2" aria-label="All experiments"><ChevronLeft className="h-4 w-4" /></Link>
-            <h1 className="min-w-0 truncate text-[1.4rem] font-semibold tracking-tight">{e.name}</h1>
+            <h1 className="min-w-0 truncate text-[2rem] leading-tight">{e.name}</h1>
             <ExperimentStatusChip status={e.status} />
             <span className="chip">{e.mode === 'FULL' ? 'Full answers' : 'Retrieval only'}</span>
             {(e.status === 'DONE' || e.status === 'ABORTED') && <button className="btn-ghost ml-auto" onClick={() => setSharing(true)}><Share2 className="h-4 w-4" /> Share</button>}
@@ -258,7 +258,7 @@ export default function ExperimentDetail() {
             {e.staleCount > 0 && <span className="text-warn"> · {e.staleCount} left out because their document changed</span>}
             {finished && ` · ${actual.tokensIn || actual.tokensOut ? `${Math.round(((actual.tokensIn ?? 0) + (actual.tokensOut ?? 0)) / 1000)}k tokens, ` : ''}$${(actual.usd ?? 0).toFixed(2)}`}
           </p>
-          {e.status === 'FAILED' && <p role="alert" className="text-sm text-red-500">{e.error}</p>}
+          {e.status === 'FAILED' && <p role="alert" className="text-sm text-danger">{e.error}</p>}
         </header>
 
         {isActive(e.status) && (

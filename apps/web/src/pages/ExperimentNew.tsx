@@ -17,7 +17,7 @@ function num(v: string): number | undefined {
 function ConfigCard({ config, index, onChange, onRemove, removable }: { config: ConfigInput; index: number; onChange: (c: ConfigInput) => void; onRemove: () => void; removable: boolean }) {
   const field = 'input-glass !py-1.5 text-sm'
   return (
-    <li className="glass rounded-2xl p-4">
+    <li className="card">
       <div className="flex items-center gap-3">
         <input className={`${field} !w-auto min-w-0 flex-1 font-semibold`} aria-label={`Name of configuration ${index + 1}`} value={config.name} maxLength={80} onChange={(e) => onChange({ ...config, name: e.target.value })} />
         {index === 0 && <span className="chip" title="Every other configuration is compared with this one">Baseline</span>}
@@ -138,7 +138,7 @@ export default function ExperimentNew() {
         <header className="flex items-center gap-3">
           <Link to="/experiments" className="btn-ghost !px-2" aria-label="All experiments"><ChevronLeft className="h-4 w-4" /></Link>
           <div>
-            <h1 className="text-[1.5rem] font-semibold tracking-tight">New experiment</h1>
+            <h1 className="text-[2rem] leading-tight">New experiment</h1>
             <p className="text-sm text-muted">The first configuration is the baseline; every other one is compared with it.</p>
           </div>
         </header>
@@ -192,13 +192,13 @@ export default function ExperimentNew() {
                 onChange={(next) => setConfigs(configs.map((x, k) => (k === i ? next : x)))} onRemove={() => setConfigs(configs.filter((_, k) => k !== i))} />
             ))}
           </ul>
-          {duplicate && <p role="alert" className="text-sm text-red-500">Two configurations have the same name.</p>}
+          {duplicate && <p role="alert" className="text-sm text-danger">Two configurations have the same name.</p>}
         </section>
 
         <section className="glass space-y-2 rounded-2xl p-5" aria-label="Estimate" aria-live="polite">
           <h2 className="text-sm font-semibold">Estimate</h2>
           {estimate.isLoading && <div className="skeleton h-12" />}
-          {estimate.isError && <p className="text-sm text-red-500">{estimate.error instanceof ApiError ? estimate.error.message : 'Could not estimate.'}</p>}
+          {estimate.isError && <p className="text-sm text-danger">{estimate.error instanceof ApiError ? estimate.error.message : 'Could not estimate.'}</p>}
           {e && (
             <>
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -220,7 +220,7 @@ export default function ExperimentNew() {
           )}
         </section>
 
-        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pb-6">
           <Link to="/experiments" className="btn-ghost">Cancel</Link>
           <button className="btn-primary" disabled={!valid || create.isPending || (e != null && e.questions === 0) || (e?.needsConfirmation === true && !confirmed)} onClick={() => create.mutate()}>
