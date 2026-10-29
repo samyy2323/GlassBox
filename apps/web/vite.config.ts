@@ -1,10 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// In dev, /api is proxied to the Spring Boot API so the SameSite=Strict refresh cookie is same-site.
+// In dev, /api is proxied to the Spring Boot API (through the web container on :8080) so the SameSite=Strict refresh cookie is same-site.
+// A browser on :5173 sends "Origin: http://localhost:5173" with every POST, and the API (rightly) allows only the origin it is deployed at, so the proxy
+// presents that origin instead. Without this, signing in from the dev server answers 403 Forbidden.
 export default defineConfig({
   plugins: [react()],
   server: {
-    proxy: { '/api': 'http://localhost:8080' },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        headers: { Origin: 'http://localhost:8080' },
+      },
+    },
   },
 })
