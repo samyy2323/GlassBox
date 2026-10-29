@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Evidence, TestSet } from './api'
 import { rangeFromEnds, trimRange } from './selection'
-import { addEvidence, cleanMix, estimateCalls, groupVersions, percent, progressPercent, removeEvidence, replaceEvidence } from './testsets'
+import { addEvidence, apportion, cleanMix, setTypeCount, estimateCalls, groupVersions, percent, progressPercent, removeEvidence, replaceEvidence } from './testsets'
 
 function set(name: string, version: number, createdAt: string): TestSet {
   return {
@@ -68,5 +68,43 @@ describe('test set helpers', () => {
     expect(addEvidence(evidence, 'd3', { start: 1, end: 2 })).toHaveLength(3)
     expect(removeEvidence(evidence, 0)).toEqual([{ documentId: 'd2', charStart: 30, charEnd: 40 }])
     expect(evidence[1].charStart).toBe(30)
+  })
+})
+
+describe('the mix of question types follows the number of questions', () => {
+  const DEFAULT = { FACTUAL: 50, NUMERIC: 15, MULTI_HOP: 10, COMPARISON: 15, UNANSWERABLE: 10 }
+  const total = (m: Record<string, number | undefined>) => Object.values(m).reduce<number>((a, b) => a + (b ?? 0), 0)
+
+  it('adds up to exactly the number of questions, for every number', () => {
+    for (let n = 0; n <= 200; n++) expect(total(apportion(n, DEFAULT))).toBe(n)
+  })
+
+  it('splits 10 questions from the default shares, and 100 back to the shares themselves', () => {
+    expect(apportion(10, DEFAULT)).toEqual({ FACTUAL: 5, NUMERIC: 2, MULTI_HOP: 1, COMPARISON: 1, UNANSWERABLE: 1 })
+    expect(apportion(100, DEFAULT)).toEqual(DEFAULT)
+    expect(apportion(50, DEFAULT)).toEqual({ FACTUAL: 25, NUMERIC: 8, MULTI_HOP: 5, COMPARISON: 7, UNANSWERABLE: 5 })
+  })
+
+  it('shares equally when every weight is zero, and never goes negative', () => {
+    expect(apportion(10, { FACTUAL: 0 })).toEqual({ FACTUAL: 2, NUMERIC: 2, MULTI_HOP: 2, COMPARISON: 2, UNANSWERABLE: 2 })
+    expect(apportion(-5, DEFAULT)).toEqual({ FACTUAL: 0, NUMERIC: 0, MULTI_HOP: 0, COMPARISON: 0, UNANSWERABLE: 0 })
+    expect(apportion(Number.NaN, DEFAULT).FACTUAL).toBe(0)
+  })
+
+  it('editing one type keeps the total and rebalances the others in their proportions', () => {
+    const edited = setTypeCount(20, apportion(20, DEFAULT), 'FACTUAL', 4)
+    expect(edited.FACTUAL).toBe(4)
+    expect(total(edited)).toBe(20)
+    expect(edited.NUMERIC).toBeGreaterThanOrEqual(1)
+    expect(edited.UNANSWERABLE).toBeGreaterThanOrEqual(1)
+  })
+
+  it('clamps an edit to the total, and spreads the rest equally when the others were all zero', () => {
+    expect(setTypeCount(10, apportion(10, DEFAULT), 'NUMERIC', 99)).toEqual({ FACTUAL: 0, NUMERIC: 10, MULTI_HOP: 0, COMPARISON: 0, UNANSWERABLE: 0 })
+    const onlyFactual = { FACTUAL: 10, NUMERIC: 0, MULTI_HOP: 0, COMPARISON: 0, UNANSWERABLE: 0 }
+    const spread = setTypeCount(10, onlyFactual, 'FACTUAL', 6)
+    expect(total(spread)).toBe(10)
+    expect(spread.FACTUAL).toBe(6)
+    expect(spread.NUMERIC).toBe(1)
   })
 })

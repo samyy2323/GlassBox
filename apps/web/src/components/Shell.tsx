@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Menu, UploadCloud } from 'lucide-react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'motion/react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useRecentTraces } from '../lib/history'
 import { SUPPORTED_SUMMARY } from '../lib/formats'
@@ -48,6 +49,7 @@ function useFileDrag(onDrop: (files: File[]) => void) {
 
 export function Shell() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { signOut } = useAuth()
   const { workspaces, current, select } = useWorkspace()
   const { enqueue } = useUploads()
@@ -102,13 +104,25 @@ export function Shell() {
       <Aurora />
       <Sidebar open={menu} onClose={closeMenu} onOpenPalette={() => setPalette(true)} theme={theme} onToggleTheme={toggleTheme} />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 p-3 lg:hidden">
+        <header className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--sidebar)] p-3 backdrop-blur-xl lg:hidden">
           <button className="btn-ghost !rounded-xl !p-2.5" onClick={() => setMenu(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
           <Wordmark />
         </header>
-        <main className="flex min-h-0 flex-1 flex-col">
-          {/* Remount pages on workspace change so nothing from one workspace leaks into another's view. */}
-          <Outlet key={current?.id} />
+        <main className="relative flex min-h-0 flex-1 flex-col">
+          {/* A short fade and rise between pages. Keyed by the path, so moving between pages animates and a re-render of one page does not. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {/* Remount pages on workspace change so nothing from one workspace leaks into another's view. */}
+              <Outlet key={current?.id} />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 

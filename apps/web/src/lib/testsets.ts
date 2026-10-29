@@ -57,6 +57,41 @@ export function cleanMix(weights: Partial<Record<QuestionType, number>>): Record
   return out
 }
 
+export type Mix = Partial<Record<QuestionType, number>>
+
+/**
+ * Splits `total` questions among the types in proportion to `weights`, in whole numbers that add up to exactly `total` (largest remainder: each type gets the
+ * whole part of its share and the leftover questions go to the biggest fractions, earlier types first on a tie). All-zero weights share equally.
+ */
+export function apportion(total: number, weights: Mix, types: QuestionType[] = GENERATABLE): Mix {
+  const n = Math.max(0, Math.floor(Number.isFinite(total) ? total : 0))
+  const w = types.map((t) => Math.max(0, weights[t] ?? 0))
+  const sum = w.reduce((a, b) => a + b, 0)
+  const parts = sum > 0 ? w : w.map(() => 1)
+  const whole = sum > 0 ? sum : parts.length
+  const exact = parts.map((x) => (n * x) / whole)
+  const counts = exact.map(Math.floor)
+  let left = n - counts.reduce((a, b) => a + b, 0)
+  const order = exact.map((x, i) => ({ i, frac: x - Math.floor(x) })).sort((a, b) => b.frac - a.frac || a.i - b.i)
+  for (const { i } of order) {
+    if (left <= 0) break
+    counts[i]++
+    left--
+  }
+  const out: Mix = {}
+  types.forEach((t, i) => { out[t] = counts[i] })
+  return out
+}
+
+/** Sets one type to `value` questions (kept between 0 and `total`) and spreads the rest of the total over the other types in their current proportions. */
+export function setTypeCount(total: number, counts: Mix, type: QuestionType, value: number, types: QuestionType[] = GENERATABLE): Mix {
+  const n = Math.max(0, Math.floor(total))
+  const v = Math.min(n, Math.max(0, Math.round(Number.isFinite(value) ? value : 0)))
+  const others = types.filter((t) => t !== type)
+  const rest = apportion(n - v, Object.fromEntries(others.map((t) => [t, counts[t] ?? 0])) as Mix, others)
+  return { ...rest, [type]: v }
+}
+
 export interface VersionGroup {
   name: string
   versions: TestSet[]
