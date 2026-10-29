@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Trash2, UploadCloud } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { PageHeader } from '../components/PageHeader'
 import { SourceDrawer, type SourceTarget } from '../components/SourceDrawer'
 import { StatusChip } from '../components/StatusChip'
 import { api, type DocumentDto } from '../lib/api'
@@ -22,7 +23,7 @@ function DocCard({ doc, index, canEdit, onOpen, onDelete, busy }: { doc: Documen
     <li className="animate-fade-up" style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}>
       <div className="glass glass-interactive group relative flex h-full flex-col gap-3 rounded-2xl p-4">
         <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] bg-fg/[0.06] text-fg">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
             <f.icon className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -95,17 +96,16 @@ export default function Documents() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-[1.65rem] font-semibold tracking-tight">Library</h1>
-            <p className="mt-1 text-sm text-muted">Everything your answers are built from.</p>
-          </div>
-          {canEdit && (
+        <PageHeader
+          eyebrow="Documents"
+          title="Library"
+          description="Everything your answers are built from. Each file is read, split into passages and indexed in the background."
+          actions={canEdit && (
             <button className="btn-primary" onClick={() => picker.current?.click()}>
               <UploadCloud className="h-[18px] w-[18px]" /> Upload documents
             </button>
           )}
-        </header>
+        />
         <input ref={picker} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => { if (e.target.files?.length) enqueue([...e.target.files]); e.target.value = '' }} />
 
         {items.length > 0 && (
@@ -116,8 +116,8 @@ export default function Documents() {
               <input className="input-glass !pl-10" placeholder="Search documents…" value={filter} onChange={(e) => setFilter(e.target.value)} />
             </label>
             <div className="flex flex-wrap gap-2" aria-label="Summary">
-              <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{ready} ready</span>
-              {count('UPLOADED', 'PROCESSING') > 0 && <span className="chip"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />{count('UPLOADED', 'PROCESSING')} in progress</span>}
+              <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-ok" />{ready} ready</span>
+              {count('UPLOADED', 'PROCESSING') > 0 && <span className="chip"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />{count('UPLOADED', 'PROCESSING')} in progress</span>}
               {count('FAILED', 'FAILED_UNSUPPORTED') > 0 && <span className="chip"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{count('FAILED', 'FAILED_UNSUPPORTED')} need attention</span>}
             </div>
             {ready > 0 && <Link to="/chat" className="ml-auto text-sm font-medium underline-offset-4 hover:underline">Ask about {ready === 1 ? 'this document' : `these ${ready}`} →</Link>}
@@ -126,8 +126,8 @@ export default function Documents() {
 
         {items.length === 0 ? (
           <div className="glass flex flex-col items-center gap-3 rounded-3xl border-2 !border-dashed px-6 py-16 text-center animate-fade-up">
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-fg text-canvas shadow-[0_8px_30px_rgb(var(--fg-rgb)/0.25)]"><UploadCloud className="h-8 w-8" /></span>
-            <h2 className="text-lg font-semibold">Your library is empty</h2>
+            <span className="grid h-16 w-16 animate-float place-items-center rounded-2xl text-[var(--on-prism)] shadow-[0_14px_44px_-12px_var(--glow)]" style={{ background: 'var(--prism)' }}><UploadCloud className="h-8 w-8" /></span>
+            <h2 className="display text-[2rem]">Your library is empty</h2>
             <p className="max-w-md text-sm text-muted">{canEdit ? 'Drop files anywhere on this page, or use the button above. They are read in the background, so you can keep working.' : 'You have read-only access to this workspace, so uploads are disabled.'}</p>
             <p className="max-w-lg text-xs text-muted">{SUPPORTED_SUMMARY}</p>
           </div>

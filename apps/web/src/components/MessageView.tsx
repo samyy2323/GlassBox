@@ -9,7 +9,7 @@ import { Thumbs } from './Thumbs'
 export function UserMessage({ text }: { text: string }) {
   return (
     <div className="flex animate-fade-up justify-end">
-      <p className="max-w-[85%] whitespace-pre-wrap rounded-[1.4rem] rounded-br-md bg-fg px-5 py-3 text-[0.95rem] leading-relaxed text-canvas shadow-[0_8px_30px_rgb(var(--fg-rgb)/0.18)]">
+      <p className="max-w-[85%] whitespace-pre-wrap rounded-[1.4rem] rounded-br-md border border-accent/30 bg-[var(--bubble)] px-5 py-3 text-[0.95rem] leading-relaxed text-fg shadow-[0_10px_34px_-14px_var(--glow)] backdrop-blur-md">
         {text}
       </p>
     </div>
@@ -46,7 +46,7 @@ function Steps({ turn }: { turn: Turn }) {
     <ol className="space-y-2" aria-label="Progress">
       {steps.map((s) => (
         <li key={s.key} className={`flex items-center gap-2.5 text-[0.84rem] transition-opacity ${s.state === 'pending' ? 'opacity-35' : ''}`}>
-          {s.state === 'done' ? <Check className="h-4 w-4 text-fg" strokeWidth={2.6} /> : s.state === 'active' ? <Loader2 className="h-4 w-4 animate-spin text-fg" /> : <Circle className="h-4 w-4 text-muted" />}
+          {s.state === 'done' ? <Check className="h-4 w-4 text-accent" strokeWidth={2.6} /> : s.state === 'active' ? <Loader2 className="h-4 w-4 animate-spin text-accent" /> : <Circle className="h-4 w-4 text-muted" />}
           <span className={s.state === 'active' ? 'font-medium' : 'text-muted'}>{s.label}</span>
         </li>
       ))}
@@ -65,10 +65,10 @@ function SourceCards({ citations, active, onOpen }: { citations: Citation[]; act
             <button
               type="button"
               onClick={() => onOpen(c)}
-              className={`glass glass-interactive flex h-full w-full flex-col gap-1.5 rounded-2xl p-3.5 text-left ${active === c.label ? '!border-fg/60' : ''}`}
+              className={`glass glass-interactive flex h-full w-full flex-col gap-1.5 rounded-2xl p-3.5 text-left ${active === c.label ? '!border-accent/70' : ''}`}
             >
               <span className="flex items-center gap-2.5">
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-fg text-[10.5px] font-bold text-canvas">{c.label.slice(1)}</span>
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10.5px] font-bold text-[var(--on-prism)]" style={{ background: 'var(--prism)' }}>{c.label.slice(1)}</span>
                 <span className="truncate text-[0.84rem] font-semibold">{c.title}</span>
                 {c.page != null && <span className="ml-auto shrink-0 text-[11px] font-medium text-muted">p.{c.page}</span>}
               </span>
@@ -122,7 +122,7 @@ export function AssistantMessage({ turn, isLast, activeLabel, onOpenSource, onRe
               text={turn.answer}
               renderCite={(label) => <CitationChip label={label} known={known.has(label)} active={activeLabel === label} onClick={() => { const c = cited.find((x) => x.label === label); if (c) onOpenSource(c) }} />}
             />
-            {streaming && <span className="ml-0.5 inline-block h-[1.05em] w-[2.5px] translate-y-[3px] animate-caret rounded-full bg-fg" aria-hidden />}
+            {streaming && <span className="ml-0.5 inline-block h-[1.05em] w-[2.5px] translate-y-[3px] animate-caret rounded-full bg-accent shadow-[0_0_10px_var(--glow)]" aria-hidden />}
           </div>
         )}
 

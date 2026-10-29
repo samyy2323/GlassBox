@@ -1,3 +1,4 @@
+import { LogoMark } from '../components/LogoMark'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { UploadCloud } from 'lucide-react'
@@ -138,14 +139,21 @@ export default function Chat() {
 
           {empty && !(traceId && past.isError) && (
             <div className="m-auto flex w-full animate-fade-up flex-col items-center py-8 text-center">
-              <h1 className="text-[2rem] font-semibold leading-[1.15] sm:text-[2.6rem]"><span className="text-gradient">How can I help with<br className="sm:hidden" /> your documents?</span></h1>
+              <div className="relative mb-7 grid place-items-center">
+                <span aria-hidden className="absolute rounded-full" style={{ inset: '-80%', background: 'radial-gradient(closest-side, rgba(167,139,250,0.26), transparent 72%)' }} />
+                <div className="relative animate-float"><LogoMark size={58} /></div>
+              </div>
+              <h1 className="text-[2.7rem] leading-[1.02] sm:text-[3.9rem]">
+                How can I help with<br />
+                <span className="text-gradient font-light italic">your documents?</span>
+              </h1>
               <p className="mt-3.5 max-w-md text-[0.92rem] leading-relaxed text-muted">
                 {docs.isSuccess && ready.length > 0
                   ? 'I search what you have uploaded, cite every source, and tell you plainly when the answer is not there.'
                   : 'Add documents, then ask questions. Every answer cites its sources.'}
               </p>
               {docs.isSuccess && ready.length > 0 && (
-                <span className="chip mt-4"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{ready.length} document{ready.length === 1 ? '' : 's'} ready</span>
+                <span className="chip mt-5"><span className="h-1.5 w-1.5 rounded-full bg-ok" />{ready.length} document{ready.length === 1 ? '' : 's'} ready</span>
               )}
 
               {docs.isSuccess && ready.length === 0 ? (
@@ -159,8 +167,8 @@ export default function Chat() {
                 <ul className="mt-9 grid w-full gap-3 sm:grid-cols-2">
                   {suggestions.map((s, i) => (
                     <li key={s.prompt} className="animate-fade-up" style={{ animationDelay: `${100 + i * 70}ms` }}>
-                      <button type="button" disabled={busy} onClick={() => void ask(s.prompt)} className="glass glass-interactive flex h-full w-full flex-col items-start gap-2 rounded-2xl p-4 text-left">
-                        <span className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] bg-fg/[0.06]"><s.icon className="h-4 w-4" /></span>
+                      <button type="button" disabled={busy} onClick={() => void ask(s.prompt)} className="glass glass-interactive flex h-full w-full flex-col items-start gap-2.5 rounded-2xl p-4 text-left">
+                        <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/15 text-accent"><s.icon className="h-[18px] w-[18px]" /></span>
                         <span className="eyebrow">{s.kind}</span>
                         <span className="text-[0.88rem] font-medium leading-snug">{s.title}</span>
                       </button>

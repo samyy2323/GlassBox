@@ -53,7 +53,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ bu
 
   const near = text.length > MAX_CHARS - 200
   return (
-    <div className="glass-strong group mx-auto flex w-full max-w-[46rem] items-end gap-1.5 rounded-[1.75rem] p-2 transition-shadow focus-within:shadow-[0_0_0_1.5px_rgb(var(--fg-rgb)/0.45),0_14px_50px_rgb(var(--fg-rgb)/0.12)]">
+    <div className="glass-strong group mx-auto flex w-full max-w-[46rem] items-end gap-1.5 rounded-[1.75rem] p-2 transition-shadow focus-within:shadow-[0_0_0_1.5px_rgb(var(--accent-rgb)/0.55),0_18px_60px_-18px_var(--glow)]">
       <button type="button" className="btn-ghost !rounded-full !p-2.5" onClick={() => files.current?.click()} aria-label="Upload documents" title="Upload documents">
         <Paperclip className="h-5 w-5" />
       </button>
@@ -83,7 +83,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ bu
       {near && <span className="self-center pr-1 text-xs text-muted tabular-nums">{text.length}/{MAX_CHARS}</span>}
       {busy ? (
         <button type="button" onClick={onStop} aria-label="Stop generating" title="Stop"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-fg text-canvas transition hover:scale-105">
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-fg text-canvas shadow-lg transition hover:scale-105">
           <Square className="h-4 w-4 fill-current" />
         </button>
       ) : (
