@@ -15,3 +15,6 @@ cli/target/
 apps/web/node_modules/
 apps/web/dist/
 node_modules/
+
+# local tooling
+.claude/

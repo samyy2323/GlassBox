@@ -3,59 +3,90 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------ design tokens
-   Two flat themes in the spirit of Claude, ChatGPT and Gemini: pure light and pure black. No gradients, no blur, no glow:
-   hierarchy comes from spacing, type, and a few quiet greys. Colours are channel triplets so bg-fg/10 style modifiers work. */
+   Obsidian + prism: a deep ink background, frosted glass panels, and one accent that splits into cyan, violet and rose like light at the edge of a crystal.
+   Dark is the home theme; the light theme is "frosted white" with the same structure. Colours are channel triplets so modifiers like bg-fg/10 work.
+   --surface is SOLID (menus, dialogs, anything that must not show what is behind it); --glass-fill is the translucent one used with backdrop blur. */
 :root {
-  --bg-rgb: 255 255 255;
-  --fg-rgb: 23 23 23;
-  --muted-rgb: 108 108 104;
-  --accent-rgb: 79 70 229;
-  --accent2-rgb: 13 148 136;
-  --ok-rgb: 22 163 74;
-  --warn-rgb: 217 119 6;
+  --bg-rgb: 243 245 252;
+  --fg-rgb: 14 17 32;
+  --muted-rgb: 84 93 120;
+  --accent-rgb: 91 70 222;
+  --accent2-rgb: 8 126 160;
+  --ok-rgb: 21 128 61;
+  --warn-rgb: 180 83 9;
+  --danger-rgb: 200 30 30;
 
   --bg: rgb(var(--bg-rgb));
   --fg: rgb(var(--fg-rgb));
   --fg-muted: rgb(var(--muted-rgb));
 
-  --sidebar: #f8f8f6;
+  --sidebar: rgba(255, 255, 255, 0.55);
   --surface: #ffffff;
-  --surface-2: #f3f3f0;
-  --hover: #efefec;
-  --bubble: #f1f1ee;
-  --line: #e7e7e3;
-  --line-strong: #d4d4cf;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
-  --glow: rgba(23, 23, 23, 0.25);
-  --scroll: rgba(0, 0, 0, 0.18);
+  --surface-2: #f1f3fb;
+  --hover: rgba(20, 24, 50, 0.06);
+  --bubble: rgba(91, 70, 222, 0.1);
+  --line: rgba(20, 24, 50, 0.1);
+  --line-strong: rgba(20, 24, 50, 0.19);
+
+  --glass-fill: rgba(255, 255, 255, 0.62);
+  --glass-fill-strong: rgba(255, 255, 255, 0.82);
+  --glass-edge-a: rgba(255, 255, 255, 1);
+  --glass-edge-b: rgba(20, 24, 50, 0.07);
+  --glass-edge-c: rgba(91, 70, 222, 0.25);
+  --spot: rgba(91, 70, 222, 0.1);
+
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 34px -16px rgba(40, 50, 110, 0.3);
+  --shadow-float: 0 30px 80px -24px rgba(30, 40, 100, 0.45), 0 0 0 1px rgba(20, 24, 50, 0.08);
+  --glow: rgba(91, 70, 222, 0.4);
+  --scroll: rgba(20, 24, 50, 0.2);
+  --orb-opacity: 0.38;
+  --grain-opacity: 0.05;
+  --grid-dot: rgba(20, 24, 50, 0.09);
+
+  --prism: linear-gradient(135deg, #67e8f9 0%, #a78bfa 52%, #f0abfc 100%);
+  --on-prism: #070810;
+
   /* older names still used in markup */
-  --glass: var(--surface);
-  --glass-strong: var(--surface-2);
-  --glass-hover: var(--hover);
+  --glass: var(--glass-fill);
+  --glass-strong: var(--glass-fill-strong);
+  --glass-hover: rgba(255, 255, 255, 0.9);
   color-scheme: light;
 }
 
 .dark {
-  --bg-rgb: 0 0 0;
-  --fg-rgb: 236 236 236;
-  --muted-rgb: 150 150 150;
-  --accent-rgb: 129 140 248;
-  --accent2-rgb: 45 212 191;
+  --bg-rgb: 5 6 11;
+  --fg-rgb: 232 236 246;
+  --muted-rgb: 150 158 180;
+  --accent-rgb: 167 139 250;
+  --accent2-rgb: 103 232 249;
   --ok-rgb: 74 222 128;
   --warn-rgb: 251 191 36;
+  --danger-rgb: 248 113 113;
 
-  --sidebar: #0a0a0a;
-  --surface: #111111;
-  --surface-2: #181818;
-  --hover: #1c1c1c;
-  --bubble: #1e1e1e;
-  --line: #262626;
-  --line-strong: #3a3a3a;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px #262626;
-  --glow: rgba(236, 236, 236, 0.3);
-  --scroll: rgba(255, 255, 255, 0.18);
+  --sidebar: rgba(9, 11, 20, 0.62);
+  --surface: #0c0e19;
+  --surface-2: #121526;
+  --hover: rgba(255, 255, 255, 0.06);
+  --bubble: rgba(167, 139, 250, 0.14);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.17);
+
+  --glass-fill: rgba(255, 255, 255, 0.045);
+  --glass-fill-strong: rgba(255, 255, 255, 0.08);
+  --glass-edge-a: rgba(255, 255, 255, 0.32);
+  --glass-edge-b: rgba(255, 255, 255, 0.05);
+  --glass-edge-c: rgba(167, 139, 250, 0.3);
+  --spot: rgba(167, 139, 250, 0.13);
+
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 40px -16px rgba(0, 0, 0, 0.75);
+  --shadow-float: 0 34px 100px -24px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --glow: rgba(167, 139, 250, 0.5);
+  --scroll: rgba(255, 255, 255, 0.17);
+  --orb-opacity: 0.55;
+  --grain-opacity: 0.07;
+  --grid-dot: rgba(255, 255, 255, 0.075);
+
+  --glass-hover: rgba(255, 255, 255, 0.11);
   color-scheme: dark;
 }
 
@@ -69,20 +100,46 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
+  font-family: 'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, 'Segoe UI Variable', 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-h1,
+/* Titles are set in a light, high-contrast serif (Cormorant Garamond). Its elegance is in its thin strokes, so a stray font-semibold on a page title must not
+   thicken it: the weight of every h1 is fixed here. Display numerals are lining, so a big figure reads as a figure and not as old-style text. */
+h1 {
+  font-family: 'Cormorant Garamond Variable', 'Cormorant Garamond', ui-serif, Georgia, 'Times New Roman', serif;
+  font-synthesis: none;
+  font-weight: 400 !important;
+  font-variant-numeric: lining-nums;
+  letter-spacing: -0.012em;
+}
+h1 em,
+h1 i {
+  font-weight: 300;
+}
 h2,
 h3 {
-  letter-spacing: -0.022em;
+  letter-spacing: -0.015em;
+}
+.display {
+  font-family: 'Cormorant Garamond Variable', 'Cormorant Garamond', ui-serif, Georgia, 'Times New Roman', serif;
+  font-synthesis: none;
+  font-weight: 400;
+  font-variant-numeric: lining-nums;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+}
+/* data in the interface face, with figures of equal width so columns line up */
+.numeric {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 ::selection {
-  background: rgb(var(--accent-rgb) / 0.3);
+  background: rgb(var(--accent-rgb) / 0.35);
 }
 
 :focus-visible {
@@ -104,54 +161,194 @@ h3 {
   border-radius: 999px;
 }
 
+/* ------------------------------------------------------------------ the background: three slow orbs, grain and a dot grid, behind everything */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg);
+}
+.aurora-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: var(--orb-opacity);
+  will-change: transform;
+}
+.aurora-orb.a {
+  left: -12vw;
+  top: -16vw;
+  width: 48vw;
+  height: 48vw;
+  background: radial-gradient(circle at 35% 35%, rgb(103 232 249 / 0.7), transparent 66%);
+  animation: orb-a 40s ease-in-out infinite;
+}
+.aurora-orb.b {
+  right: -14vw;
+  top: 8vh;
+  width: 52vw;
+  height: 52vw;
+  background: radial-gradient(circle at 60% 40%, rgb(167 139 250 / 0.75), transparent 66%);
+  animation: orb-b 48s ease-in-out infinite;
+}
+.aurora-orb.c {
+  bottom: -22vw;
+  left: 26vw;
+  width: 46vw;
+  height: 46vw;
+  background: radial-gradient(circle at 50% 50%, rgb(240 171 252 / 0.6), transparent 66%);
+  animation: orb-c 56s ease-in-out infinite;
+}
+.aurora-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 30px 30px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 20%, #000 10%, transparent 72%);
+  mask-image: radial-gradient(ellipse at 50% 20%, #000 10%, transparent 72%);
+}
+.aurora-grain {
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
 /* ------------------------------------------------------------------ surfaces */
 @layer components {
-  /* the names stay so every page keeps working, but they are flat panels now */
+  /* Glass: a frosted fill, a gradient hairline edge that is bright at the top left, an inner highlight, a long soft shadow.
+     The names stay so every page keeps working. */
   .glass,
   .glass-strong,
   .card {
-    background: var(--surface);
-    border: 1px solid var(--line);
+    position: relative;
+    isolation: isolate;
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
     box-shadow: var(--shadow);
   }
+  .glass-strong {
+    background: var(--glass-fill-strong);
+  }
+  .glass::after,
+  .glass-strong::after,
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(145deg, var(--glass-edge-a), var(--glass-edge-b) 38%, var(--glass-edge-b) 62%, var(--glass-edge-c));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  }
   .card {
-    border-radius: 1rem;
+    border-radius: 1.15rem;
     padding: 1.25rem;
   }
+
+  /* a light that follows the pointer across interactive glass (lib/pointerLight sets --mx and --my) */
   .glass-interactive {
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease, box-shadow 0.25s ease;
+  }
+  .glass-interactive::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), var(--spot), transparent 62%);
   }
   .glass-interactive:hover {
-    background: var(--surface-2);
-    border-color: var(--line-strong);
+    transform: translateY(-2px);
+    background: var(--glass-fill-strong);
+  }
+  .glass-interactive:hover::before {
+    opacity: 1;
   }
 
-  /* the one accent: the inverse of the page (black on white, white on black) */
+  /* the one accent: the prism, with dark ink on it so contrast is high everywhere on the gradient */
   .btn-primary,
   .btn {
+    position: relative;
+    overflow: hidden;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 0.85rem;
-    padding: 0.6rem 1.05rem;
+    border-radius: 0.9rem;
+    padding: 0.62rem 1.1rem;
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: -0.01em;
-    color: #fff;
-    background: rgb(var(--accent-rgb));
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    color: var(--on-prism);
+    background: var(--prism);
+    box-shadow: 0 10px 28px -10px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, filter 0.2s ease;
+  }
+  .btn-primary::after,
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    pointer-events: none;
   }
   .btn-primary:hover:not(:disabled),
   .btn:hover:not(:disabled) {
-    opacity: 0.86;
+    transform: translateY(-1px);
+    filter: saturate(1.15) brightness(1.04);
+    box-shadow: 0 14px 34px -10px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.985);
+  .btn-primary:hover:not(:disabled)::after,
+  .btn:hover:not(:disabled)::after {
+    transform: translateX(120%);
+    transition: transform 0.7s ease;
+  }
+  .btn-primary:active:not(:disabled),
+  .btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.985);
   }
   .btn-primary:disabled,
   .btn:disabled {
-    opacity: 0.3;
+    opacity: 0.35;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* quiet glass button for secondary actions */
+  .btn-glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--line-strong);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    padding: 0.55rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--fg);
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+  .btn-glass:hover:not(:disabled) {
+    background: var(--glass-fill-strong);
+    border-color: rgb(var(--accent-rgb) / 0.5);
+    transform: translateY(-1px);
+  }
+  .btn-glass:disabled {
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
@@ -159,7 +356,7 @@ h3 {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    border-radius: 0.7rem;
+    border-radius: 0.75rem;
     padding: 0.45rem 0.7rem;
     font-size: 0.8125rem;
     font-weight: 500;
@@ -173,22 +370,23 @@ h3 {
 
   .input-glass {
     width: 100%;
-    border-radius: 0.85rem;
+    border-radius: 0.9rem;
     border: 1px solid var(--line-strong);
-    background: var(--surface);
+    background: var(--glass-fill);
     padding: 0.7rem 0.95rem;
     font-size: 0.92rem;
     color: var(--fg);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   }
   .input-glass::placeholder {
     color: var(--fg-muted);
-    opacity: 0.85;
+    opacity: 0.8;
   }
   .input-glass:focus {
     outline: none;
     border-color: rgb(var(--accent-rgb));
-    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.18);
+    background: var(--glass-fill-strong);
+    box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0.2);
   }
 
   .chip {
@@ -200,7 +398,7 @@ h3 {
     font-size: 0.72rem;
     font-weight: 600;
     border: 1px solid var(--line);
-    background: var(--surface-2);
+    background: var(--glass-fill);
   }
 
   .kbd {
@@ -208,10 +406,10 @@ h3 {
     align-items: center;
     justify-content: center;
     min-width: 1.35rem;
-    padding: 0.05rem 0.35rem;
-    border-radius: 0.4rem;
+    padding: 0.05rem 0.38rem;
+    border-radius: 0.45rem;
     border: 1px solid var(--line-strong);
-    background: var(--surface);
+    background: var(--glass-fill);
     font-size: 0.68rem;
     font-weight: 600;
     color: var(--fg-muted);
@@ -220,23 +418,29 @@ h3 {
   .eyebrow {
     font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.24em;
     text-transform: uppercase;
     color: rgb(var(--accent-rgb));
   }
 
-  /* coloured headline text on the flat background */
+  /* headline text filled with the prism */
   .text-gradient {
-    background: linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent2-rgb)));
+    background: var(--prism);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
+  :root:not(.dark) .text-gradient {
+    background: linear-gradient(135deg, #0891b2 0%, #5b46de 55%, #c026d3 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
 
+  /* a glass loading placeholder */
   .skeleton {
-    background: linear-gradient(90deg, transparent, rgb(var(--fg-rgb) / 0.08), transparent) 0 0 / 200% 100%, var(--surface-2);
+    background: linear-gradient(90deg, transparent, rgb(var(--fg-rgb) / 0.09), transparent) 0 0 / 200% 100%, var(--glass-fill);
     animation: shimmer 2.2s linear infinite;
-    border-radius: 0.7rem;
+    border-radius: 0.75rem;
   }
 
   /* rendered answer text */
@@ -270,7 +474,7 @@ h3 {
     color: rgb(var(--accent-rgb));
   }
   .prose-answer code {
-    font-family: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+    font-family: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
     font-size: 0.85em;
     padding: 0.12rem 0.42rem;
     border-radius: 0.4rem;
@@ -280,7 +484,7 @@ h3 {
   }
 }
 
-/* motion is decoration: switch it off for people who ask for less */
+/* people who ask for less get a calmer interface: no movement, and solid panels instead of blurred glass */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -289,5 +493,20 @@ h3 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-strong,
+  .card,
+  .btn-glass,
+  .input-glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+  .aurora-orb,
+  .aurora-grain {
+    display: none;
   }
 }

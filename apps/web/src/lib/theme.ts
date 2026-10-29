@@ -13,7 +13,8 @@ function stored(): Theme | null {
 }
 
 function initial(): Theme {
-  return stored() ?? (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+  // Dark is the home theme: it is what the glass is designed for. Light is a choice the person makes (and we remember it).
+  return stored() ?? 'dark'
 }
 
 export function applyTheme(theme: Theme) {
