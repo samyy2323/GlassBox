@@ -26,7 +26,6 @@ export const queryKeys = {
   documentVersions: (id: string) => ['document-versions', id] as const,
   documentImpact: (id: string, version: number) => ['document-impact', id, version] as const,
   reportLinks: (id: string) => ['report-links', id] as const,
-  budget: (workspaceId?: string) => ['budget', workspaceId] as const,
   autotunes: (workspaceId?: string) => ['autotunes', workspaceId] as const,
   autotune: (id: string) => ['autotune', id] as const,
   testsetDiff: (id: string, against: string) => ['testset-diff', id, against] as const,

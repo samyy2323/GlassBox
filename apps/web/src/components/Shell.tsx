@@ -82,7 +82,6 @@ export function Shell() {
       { id: 'testsets', label: 'Open test sets', hint: 'Questions to measure answers', icon: paletteIcons.testsets, run: () => navigate('/testsets') },
       { id: 'experiments', label: 'Open experiments', hint: 'Measure configurations', icon: paletteIcons.experiments, run: () => navigate('/experiments') },
       { id: 'feedback', label: 'Open feedback', hint: 'Turn bad answers into test questions', icon: paletteIcons.feedback, run: () => navigate('/feedback') },
-      { id: 'budget', label: 'Open budget', hint: 'Prices and spending limits', icon: paletteIcons.budget, run: () => navigate('/budget') },
       { id: 'autotune', label: 'Open AutoTune', hint: 'Search for a better configuration', icon: paletteIcons.autotune, run: () => navigate('/autotune') },
       { id: 'calibration', label: 'Calibrate the judge', hint: 'Check its grades against yours', icon: paletteIcons.calibration, run: () => navigate('/calibration') },
       { id: 'xray', label: 'Open X-Ray', hint: 'How answers were made', icon: paletteIcons.xray, run: () => navigate('/xray') },

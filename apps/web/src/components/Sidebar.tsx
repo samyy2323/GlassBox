@@ -1,4 +1,4 @@
-import { ChevronsUpDown, FlaskConical, Files, Inbox, ListChecks, LogOut, Moon, Plus, Scale, ScanSearch, Search, Sun, Wallet, Wand2, type LucideIcon } from 'lucide-react'
+import { ChevronsUpDown, FlaskConical, Files, Inbox, ListChecks, LogOut, Moon, Plus, Scale, ScanSearch, Search, Sun, Wand2, type LucideIcon } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
@@ -30,7 +30,6 @@ const GROUPS: { label: string; items: { to: string; label: string; icon: LucideI
   {
     label: 'Operate',
     items: [
-      { to: '/budget', label: 'Budget', icon: Wallet },
       { to: '/feedback', label: 'Feedback', icon: Inbox },
       { to: '/xray', label: 'X-Ray', icon: ScanSearch, end: true },
     ],

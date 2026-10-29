@@ -634,26 +634,6 @@ export interface CreatedReportLink {
   expiresAt: string
   path: string
 }
-export interface ModelPrice {
-  model: string
-  promptUsdPerMillion: number
-  completionUsdPerMillion: number
-}
-export interface BudgetLimits {
-  monthlyUsd: number | null
-  perRunUsd: number | null
-  confirmAboveUsd: number | null
-}
-export interface BudgetOverview {
-  budget: BudgetLimits
-  spentThisMonthUsd: number
-  tokensThisMonth: number
-  prices: ModelPrice[]
-  defaults: ModelPrice
-  recent: { kind: string; refId: string; estimatedUsd: number; actualUsd: number; estimatedTokens: number; actualTokens: number; estimatedCalls: number; actualCalls: number; aborted: boolean; createdAt: string }[]
-  tokenError: number | null
-  measuredRuns: number
-}
 export interface RunLimits {
   capUsd?: number
   capCalls?: number
@@ -819,10 +799,6 @@ export const api = {
     if (!res.ok) throw await toError(res)
     return res.blob()
   },
-  budget: () => request<BudgetOverview>('/api/budget'),
-  setBudget: (b: BudgetLimits) => request<BudgetLimits>('/api/budget', { method: 'PUT', body: JSON.stringify(b) }),
-  setPrice: (p: ModelPrice) => request<ModelPrice[]>('/api/budget/prices', { method: 'PUT', body: JSON.stringify(p) }),
-  deletePrice: (model: string) => request<ModelPrice[]>(`/api/budget/prices?model=${encodeURIComponent(model)}`, { method: 'DELETE' }),
   cancelExperiment: (id: string) => request<void>(`/api/experiments/${id}/cancel`, { method: 'POST' }),
   experimentResults: (id: string, run: string) => request<ExperimentResult[]>(`/api/experiments/${id}/results?run=${run}`),
   compareRuns: (a: string, b: string) => request<RunDiff>(`/api/experiments/compare?a=${a}&b=${b}`),

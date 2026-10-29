@@ -2,9 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
-import type { BudgetOverview, DocumentImpact, DocumentVersion } from '../lib/api'
+import type { DocumentImpact, DocumentVersion } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
-import Budget from './Budget'
 import DocumentChanges from './DocumentChanges'
 import Feedback from './Feedback'
 
@@ -53,24 +52,6 @@ describe('the document changes page', () => {
     const html = page({ ...impact, status: 'NO_QUESTIONS', note: 'No final test set has a question about this document.', verdict: undefined, passToFail: [] })
     expect(html).toContain('No final test set has a question about this document.')
     expect(html).not.toContain('marked stale')
-  })
-})
-
-describe('the budget page', () => {
-  const overview: BudgetOverview = {
-    budget: { monthlyUsd: 20, perRunUsd: 2, confirmAboveUsd: 1 }, spentThisMonthUsd: 5, tokensThisMonth: 120000, prices: [{ model: 'gpt-4o-mini', promptUsdPerMillion: 0.15, completionUsdPerMillion: 0.6 }],
-    defaults: { model: 'default', promptUsdPerMillion: 0, completionUsdPerMillion: 0 }, tokenError: -0.4, measuredRuns: 3,
-    recent: [{ kind: 'EXPERIMENT', refId: 'r1', estimatedUsd: 0.5, actualUsd: 0.3, estimatedTokens: 50000, actualTokens: 30000, estimatedCalls: 100, actualCalls: 60, aborted: true, createdAt: '2026-10-15T10:00:00Z' }],
-  }
-  const html = render('/budget', '/budget', <Budget />, (qc) => qc.setQueryData(queryKeys.budget('ws-1'), overview))
-
-  it('shows the month, the limits, the prices and the estimator’s error', () => {
-    expect(html).toContain('This month')
-    expect(html).toContain('$5.00')
-    expect(html).toContain('role="progressbar"')
-    expect(html).toContain('gpt-4o-mini')
-    expect(html).toContain('40% fewer tokens than estimated')
-    expect(html).toContain('stopped by its cap')
   })
 })
 

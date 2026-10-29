@@ -16,20 +16,6 @@ export function formatTokens(n: number): string {
 }
 
 /** Share of the monthly budget that is spent, clamped for a progress bar; null when there is no budget. */
-export function monthProgress(spent: number, budget: number | null | undefined): number | null {
-  if (budget == null || budget <= 0) return null
-  return Math.max(0, Math.min(100, Math.round((spent / budget) * 100)))
-}
-
-/** The estimator's own error, in words: positive means runs used more than projected. */
-export function estimatorError(error: number | null | undefined, runs: number): string {
-  if (error == null || runs === 0) return 'No finished run has been measured yet, so the estimator’s error is not known.'
-  const pct = Math.round(Math.abs(error) * 100)
-  if (pct < 3) return `Over the last ${runs} run${runs === 1 ? '' : 's'} the estimate was within 3% of the tokens actually used.`
-  return `Over the last ${runs} run${runs === 1 ? '' : 's'} runs used ${pct}% ${error < 0 ? 'fewer' : 'more'} tokens than estimated.`
-}
-
-/** The cost breakdown lines worth showing (those with anything in them), in the order SPEC names them. */
 export function breakdownLines(breakdown: Record<string, unknown> | undefined): { key: string; label: string; tokens: number; calls: number; usd: number }[] {
   if (!breakdown) return []
   const labels: [string, string][] = [['embeddings', 'Embeddings'], ['generation', 'Answers'], ['judging', 'Judging'], ['rewriting', 'Query rewriting'], ['synthesis', 'Question synthesis']]
