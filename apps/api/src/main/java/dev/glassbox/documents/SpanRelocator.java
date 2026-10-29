@@ -50,6 +50,30 @@ public final class SpanRelocator {
         return fuzzy(newText, span, start);
     }
 
+    private static final Pattern NUMBER = Pattern.compile("\\d+(?:[.,:]\\d+)*");
+
+    /** The numbers written in a passage, in order. */
+    public static List<String> numbers(String text) {
+        List<String> out = new ArrayList<>();
+        Matcher m = NUMBER.matcher(text);
+        while (m.find()) out.add(m.group());
+        return out;
+    }
+
+    /**
+     * Like {@link #relocate}, but a passage found only by similarity whose numbers differ from the original is not accepted as the same passage. A sentence that was
+     * reworded and still says "20 days" is the same fact; one that now says "24 days" shares nearly all its words and is a different fact, and a test question whose
+     * expected answer is "20" must go back to review instead of being quietly pointed at it.
+     */
+    public static Optional<Located> relocateSameFacts(String oldText, String newText, int start, int end) {
+        Optional<Located> found = relocate(oldText, newText, start, end);
+        if (found.isPresent() && found.get().how() == How.FUZZY
+                && !numbers(oldText.substring(start, end)).equals(numbers(newText.substring(found.get().start(), found.get().end())))) {
+            return Optional.empty();
+        }
+        return found;
+    }
+
     private static Optional<Located> fuzzy(String newText, String span, int oldStart) {
         Set<String> want = words(span);
         if (want.size() < 3) return Optional.empty(); // too short to tell one passage from another

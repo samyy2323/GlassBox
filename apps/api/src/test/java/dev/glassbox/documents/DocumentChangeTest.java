@@ -88,4 +88,26 @@ class DocumentChangeTest {
         assertThat(SpanRelocator.relocate("a b c", "x y z a", 0, 3)).as("two words cannot be told from any other two").isEmpty();
         assertThat(SpanRelocator.relocate("   \n  ", "anything", 0, 3)).isEmpty();
     }
+
+    @org.junit.jupiter.api.Test
+    void aSimilarSentenceWhoseNumbersChangedIsNotTheSameFactButARewordingThatKeepsThemIs() {
+        String old = "Every full-time employee receives 20 days of paid annual leave per year, in addition to the 9 public holidays.";
+        int end = old.length();
+
+        String changed = "Every full-time employee receives 24 days of paid annual leave per year, in addition to the 9 public holidays.";
+        assertThat(SpanRelocator.relocate(old, changed, 0, end)).as("by similarity alone it would be found").hasValueSatisfying(l -> assertThat(l.how()).isEqualTo(SpanRelocator.How.FUZZY));
+        assertThat(SpanRelocator.relocateSameFacts(old, changed, 0, end)).as("but the number changed, so the question must be reviewed").isEmpty();
+
+        String reworded = "Each full-time employee gets 20 days of paid annual leave every year, in addition to the 9 public holidays.";
+        assertThat(SpanRelocator.relocateSameFacts(old, reworded, 0, end)).as("same numbers, other words: still the same fact").isPresent();
+
+        String moved = "A new first paragraph.\n\n" + old;
+        assertThat(SpanRelocator.relocateSameFacts(old, moved, 0, end)).as("an exact match is untouched").hasValueSatisfying(l -> assertThat(l.how()).isEqualTo(SpanRelocator.How.EXACT));
+    }
+
+    @org.junit.jupiter.api.Test
+    void numbersAreReadInOrderWithDecimalsTimesAndThousands() {
+        assertThat(SpanRelocator.numbers("Up to 2 days, 09:00 to 15:00, 1.5 times, 1,000 units, 8 km/h")).containsExactly("2", "09:00", "15:00", "1.5", "1,000", "8");
+        assertThat(SpanRelocator.numbers("no digits here")).isEmpty();
+    }
 }

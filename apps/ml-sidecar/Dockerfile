@@ -9,14 +9,16 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --default-timeout=180 --retries 10 -r requirements.txt
 
-# Bake the default models into the image so containers start offline and fast.
+# Bake every model the app can pick into the image so containers start offline and fast. AutoTune compares the three embedding models, and a model that has to
+# be downloaded on first use fails on a machine without internet access (or, as it once did, because the model folder was not writable by the sidecar's user).
 RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; \
-TextEmbedding(model_name='BAAI/bge-small-en-v1.5'); TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2')" \
-    && useradd --system --uid 10001 --no-create-home sidecar && chmod -R a+rX /models
+TextEmbedding(model_name='BAAI/bge-small-en-v1.5'); TextEmbedding(model_name='BAAI/bge-base-en-v1.5'); TextEmbedding(model_name='sentence-transformers/all-MiniLM-L6-v2'); \
+TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2')" \
+    && useradd --system --uid 10001 --no-create-home sidecar && chown -R sidecar /models && chmod -R a+rX /models
 
 # The NLI weights come from a standalone module, so changing application code does not download them again.
 COPY app/nli_model.py /tmp/nli_model.py
-RUN python /tmp/nli_model.py && chmod -R a+rX /models && rm /tmp/nli_model.py
+RUN python /tmp/nli_model.py && chown -R sidecar /models && chmod -R a+rX /models && rm /tmp/nli_model.py
 
 COPY app app
 USER 10001

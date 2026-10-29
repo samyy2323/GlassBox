@@ -135,7 +135,7 @@ public class ChangeImpactHandler implements JobHandler {
                 }
                 touched = true;
                 String from = earlier.get(s.versionId());
-                var found = from == null ? java.util.Optional.<SpanRelocator.Located>empty() : SpanRelocator.relocate(from, newText, s.charStart(), s.charEnd());
+                var found = from == null ? java.util.Optional.<SpanRelocator.Located>empty() : SpanRelocator.relocateSameFacts(from, newText, s.charStart(), s.charEnd());
                 if (found.isEmpty()) {
                     lost = true;
                     out.add(s);
