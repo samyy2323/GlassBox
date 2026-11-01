@@ -1,3 +1,5 @@
+<p align="center"><img src="apps/web/public/favicon.svg" alt="Glassbox logo: a glass cube balanced on its corner" width="96"></p>
+
 # Glassbox
 
 Multi-tenant RAG evaluation and auto-tuning platform: upload documents, generate a test set, search configurations, compare them with confidence intervals, and diagnose every failure. The full plan is in [docs/SPEC.md](docs/SPEC.md).
@@ -18,7 +20,7 @@ What works today: upload almost any document (PDF, Word, Excel, PowerPoint, Open
 
 ## The interface
 
-A ChatGPT-style chat with a sidebar of past conversations, live progress while an answer is prepared, clickable citations that open the exact passage in a slide-over, a library of documents with drag-anywhere upload, X-Ray for every answer, test sets with a review screen, an Eval Lab (experiments and judge calibration), AutoTune, and a Ctrl K command palette. It comes in two flat themes, pure black and pure white, with a single indigo and teal accent for text, buttons and highlights, and a 3-second splash screen on load.
+A ChatGPT-style chat with a sidebar of past conversations, live progress while an answer is prepared, clickable citations that open the exact passage in a slide-over, a library of documents with drag-anywhere upload, X-Ray for every answer, test sets with a review screen, an Eval Lab (experiments and judge calibration), AutoTune, and a Ctrl K command palette. The look is frosted glass over an ink background with one prism accent (cyan, violet, rose); the logo is a glass cube balanced on its corner, drawn as an SVG and, on the splash and sign-in screens, as a real transparent 3D cube (three.js, loaded only there). Dark is the default and a frosted-white light theme is one click away. Headlines are Cormorant Garamond, the interface is Manrope, code is Geist Mono, all bundled. Motion respects reduced-motion and reduced-transparency settings. Reasons and numbers: [ADR 0011](docs/adr/0011-interface-design.md).
 
 ### Test sets
 
@@ -61,7 +63,7 @@ The result page shows the verdict, tuning against held-out score side by side, a
 - **Feedback loop.** A thumbs under each chat answer. A thumbs-down lands in the Feedback inbox (editors) with the question, the answer, the comment and what was retrieved. The editor marks the passage that holds the right answer (or says the documents have none); the failure classifier then names the stage that lost it from the stored trace. Saving makes a `FEEDBACK` test question in a draft version of the chosen test set (a final one is copied first), refused when the set already has a question that means the same. The share of questions that came from real failures is shown.
 - **Document change impact.** Replacing a document keeps the old version's text. After the new one is ingested, every gold span that pointed at it is looked for in the new text (exact, then the same words with other spacing, then a passage sharing at least 75% of its words); the rest are marked stale, left out and waiting for review. A new final version of the test set holds the re-located spans, the configuration last measured on that test set is re-run on it as a REGRESSION experiment, and the Changes page of the document shows the paragraph diff, a paired verdict against the earlier run and the questions that now fail with the stage that lost them.
 - **Query transformers.** Multi-query, HyDE and decompose, per configuration, with a "Rewrite query" step in X-Ray, a cost entry and an AutoTune option. A reply the model gets wrong falls back to the plain question. Temperature-0 calls are cached. [ADR 0008](docs/adr/0008-query-transformers-cache-and-budgets.md).
-- **Cost and budgets.** Every estimate has a breakdown (embeddings, answers, judging, rewriting) priced from an editable table; a monthly budget, a per-run cap and a confirmation threshold refuse or hold a run before it starts; a running experiment stops at 120% of its cap and keeps what it measured; estimate against actual is recorded and the Budget page shows the estimator's own error.
+- **Cost and budgets.** Every estimate has a breakdown (embeddings, answers, judging, rewriting) priced from an editable table; a monthly budget, a per-run cap and a confirmation threshold refuse or hold a run before it starts; a running experiment stops at 120% of its cap and keeps what it measured; estimate against actual is recorded and the estimator's own error is recorded with each run (the interface has no Budget page; the cost estimate and the safety stop stay in the engine).
 - **Reports.** Share on an experiment or an AutoTune run makes a frozen report (numbers and intervals, verdicts, configurations, failure histogram, test set statistics, limitations), as a PDF or as a read-only link that needs no sign-in, expires and can be revoked; a redacted report leaves out question texts. [ADR 0009](docs/adr/0009-reports-and-share-links.md).
 
 ## Run it
@@ -97,7 +99,7 @@ Needs JDK 21 and Docker (Testcontainers starts a real pgvector Postgres):
 ```bash
 cd apps/api && ./mvnw verify      # 443 tests: isolation (tables, definer functions, canaries end to end), prompt-injection suite, request limits, audit, upload guard, headers and CORS, metrics and OpenAPI, the CI gate, queue concurrency, chunker properties, retrieval SQL, chat, traces, test sets, statistics against SciPy fixtures, experiments, calibration, indexing, failure classifier, AutoTune, transformers, budgets, feedback, document changes, reports
 cd cli && ./mvnw verify           # 16 tests: the command line client against a stand-in server, exit codes, files written, what is sent
-cd apps/web && npm ci && npm test # 128 tests: SSE parser, highlighting, review shortcuts, selection offsets, forest plot and heatmap layout, calibration queue, AutoTune and failure report layout, the pages rendered from a real API response, the budget, feedback, change and report pages; also npm run lint and npm run build
+cd apps/web && npm ci && npm test # 141 tests: SSE parser, highlighting, review shortcuts, selection offsets, forest plot and heatmap layout, calibration queue, AutoTune and failure report layout, the pages rendered from a real API response, the budget, feedback, change and report pages; also npm run lint and npm run build
 cd apps/ml-sidecar && pip install -r requirements-dev.txt && python -m pytest
 python benchmarks/stats_fixtures.py   # regenerates the SciPy reference values the Java statistics are checked against
 ```
@@ -195,7 +197,7 @@ To make AutoTune show a quality gain, the corpus has to be harder than this one:
 - **Reports.** A report of that regression run made a 2-page PDF (summary, test set statistics, configuration, metrics with intervals); its read-only link opened with no sign-in (HTTP 200, `Cache-Control: no-store`) and gave 404 once revoked.
 
 **Two bugs this run found that the 399 tests had not**, both fixed with a test that fails on the old code:
-1. Query rewriting calls were not counted as spend in a retrieval run: the budget page showed 0 actual calls against 90 estimated, and a call cap could never see them.
+1. Query rewriting calls were not counted as spend in a retrieval run: the cost record showed 0 actual calls against 90 estimated, and a call cap could never see them.
 2. A document replacement skipped because a draft test set was open left the test set's spans pointing at the older version; every later replacement then ignored them, so questions whose evidence had been deleted stayed accepted. Spans are now re-located from the text of the version they point at.
 
 Limits of this run: the replaced paragraphs are synthetic text written by the script, not real edits; the regression run used `decompose` because that was the last configuration measured on the test set; no judge-scored full-answer experiment was run for P5.
