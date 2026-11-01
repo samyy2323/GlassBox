@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Inbox, Loader2, ScanSearch, X } from 'lucide-react'
+import { Check, Loader2, ScanSearch, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DocumentViewer } from '../components/DocumentViewer'
+import { EmptyState } from '../components/EmptyState'
 import { api, ApiError, type FeedbackDetail, type FeedbackItem, type SpanInput } from '../lib/api'
 import { addSpan, canConvert, defaultType, fromFeedbackText, sameSpan, toggleSpan } from '../lib/feedback'
 import { queryKeys } from '../lib/queryKeys'
@@ -124,14 +125,14 @@ export default function Feedback() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
         <header>
-          <h1 className="flex items-center gap-2 text-[2.6rem] leading-[1.05]"><Inbox className="h-6 w-6 text-accent" /> Feedback</h1>
+          <h1 className="text-[2.6rem] leading-[1.05]">Feedback</h1>
           <p className="mt-1 text-sm text-muted">Answers people marked as bad. Mark where the right answer is, and it becomes a test question, so the test set grows from real failures.</p>
           {summary.data && <p className="mt-1 text-sm">{fromFeedbackText(summary.data)} <span className="text-muted">{summary.data.open} open, {summary.data.converted} added, {summary.data.dismissed} dismissed.</span></p>}
         </header>
         <div className="flex gap-1.5" role="tablist" aria-label="Status">
           {['OPEN', 'CONVERTED', 'DISMISSED'].map((s) => <button key={s} role="tab" aria-selected={status === s} className={`btn-ghost !border ${status === s ? '!border-accent' : '!border-[var(--line)]'}`} onClick={() => { setStatus(s); setPick('') }}>{STATUS[s]}</button>)}
         </div>
-        {list.isLoading ? <div className="skeleton h-24" /> : items.length === 0 ? <p className="card text-sm text-muted">Nothing here. Use the thumbs under an answer in the chat to report a bad one.</p> : (
+        {list.isLoading ? <div className="skeleton h-24" /> : items.length === 0 ? <EmptyState title="Nothing here">Use the thumbs under an answer in the chat to report a bad one.</EmptyState> : (
           <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
             <ul className="space-y-1.5" aria-label="Feedback items">
               {items.map((i) => (

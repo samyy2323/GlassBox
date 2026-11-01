@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { EmptyState } from '../components/EmptyState'
 import { api } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
@@ -31,10 +32,9 @@ export default function XRayList() {
       <h1 className="text-[2.6rem] leading-[1.05]">X-Ray</h1>
       <p className="text-sm text-muted">Every answer leaves a trace: what was retrieved, how it was ranked, what reached the prompt, and why.</p>
       {items.length === 0 ? (
-        <div className="card text-center text-sm text-muted">
-          <p>No answers yet.</p>
-          <p className="mt-1"><Link to="/chat" className="underline underline-offset-4">Ask a question in Chat</Link> and it will appear here.</p>
-        </div>
+        <EmptyState title="No answers yet." action={<Link to="/chat" className="btn-primary">Ask a question in Chat</Link>}>
+          Every answer you ask for will leave a trace here.
+        </EmptyState>
       ) : (
         <ul className="divide-y divide-[var(--line)] glass overflow-hidden rounded-2xl">
           {items.map((t) => (
