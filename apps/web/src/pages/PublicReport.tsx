@@ -28,8 +28,8 @@ export default function PublicReport() {
       <div className="mx-auto w-full max-w-3xl space-y-5 p-4 sm:p-8">
         {report.isLoading && <div className="skeleton h-40" aria-label="Loading the report" />}
         {report.isError && (
-          <div className="glass rounded-2xl p-6" role="alert">
-            <h1 className="text-lg font-semibold">This link is not valid</h1>
+          <div className="card" role="alert">
+            <h1 className="text-[1.6rem] leading-tight">This link is not valid</h1>
             <p className="mt-1 text-sm text-muted">It may have expired or been revoked, or it may have been copied incorrectly. Ask whoever sent it for a new one.</p>
           </div>
         )}

@@ -7,7 +7,7 @@ import { formatDelta } from '../lib/experiments'
 import { queryKeys } from '../lib/queryKeys'
 import { useWorkspace } from '../lib/workspace'
 
-const KIND = { SAME: '', ADDED: 'border-l-4 border-ok bg-ok/10', REMOVED: 'border-l-4 border-red-500 bg-red-500/10' } as const
+const KIND = { SAME: '', ADDED: 'border-l-4 border-ok bg-ok/10', REMOVED: 'border-l-4 border-danger bg-danger/10' } as const
 const MARK = { SAME: '  ', ADDED: '+ ', REMOVED: '- ' } as const
 
 function Impact({ r }: { r: DocumentImpact }) {
@@ -69,13 +69,13 @@ export default function DocumentChanges() {
         <header className="flex items-center gap-3">
           <Link to="/documents" className="btn-ghost !px-2" aria-label="Library"><ChevronLeft className="h-4 w-4" /></Link>
           <div>
-            <h1 className="text-[1.5rem] font-semibold tracking-tight">Changes to this document</h1>
+            <h1 className="text-[2rem] leading-tight">Changes to this document</h1>
             <p className="text-sm text-muted">What a new version changed in the text, in the test set and in how well your pipeline finds things.</p>
           </div>
         </header>
         {versions.isLoading && <div className="skeleton h-24" />}
-        {versions.isError && <p role="alert" className="text-sm text-red-500">This document could not be found.</p>}
-        {list.length === 1 && <p className="glass rounded-2xl p-5 text-sm text-muted">There is only one version. Replace the document with a new file to see what the change does.</p>}
+        {versions.isError && <p role="alert" className="text-sm text-danger">This document could not be found.</p>}
+        {list.length === 1 && <p className="card text-sm text-muted">There is only one version. Replace the document with a new file to see what the change does.</p>}
         {list.length > 1 && (
           <>
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Versions">

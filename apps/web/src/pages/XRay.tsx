@@ -136,7 +136,7 @@ export default function XRay() {
     <div className="mx-auto w-full max-w-6xl space-y-8 p-4 sm:p-6">
       <header className="space-y-1">
         <Link to="/xray" className="text-xs text-fg underline-offset-4 hover:underline">← All traces</Link>
-        <h1 className="text-lg font-semibold">{t.question}</h1>
+        <h1 className="text-[1.6rem] leading-tight">{t.question}</h1>
         <p className="text-xs text-muted">
           <span className={`font-semibold ${statusCls}`}>{t.status}</span> · {t.model ?? 'no model call'} · {new Date(t.createdAt).toLocaleString()}
           {t.data.usage && ` · ~${t.data.usage.promptTokens} prompt tokens, ~${t.data.usage.answerTokens} answer tokens (local model: no cost)`}

@@ -87,7 +87,7 @@ function Labeller({ sample, labels, setLabels, onSave, saving, error }: { sample
         <span>Item {index + 1} of {sample.items.length} · {done} labelled</span>
         <span className="flex items-center gap-1.5"><EyeOff className="h-3.5 w-3.5" /> The judge's verdict is hidden from you</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-fg/10"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(done / sample.items.length) * 100}%` }} /></div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-fg/10"><div className="h-full rounded-full transition-all" style={{ width: `${(done / sample.items.length) * 100}%`, background: 'var(--prism)' }} /></div>
       <p className="text-sm font-medium">{METRIC_TEXT[item.metric].task}</p>
       <div className="space-y-3">
         {block('Question', item.question)}
@@ -106,7 +106,7 @@ function Labeller({ sample, labels, setLabels, onSave, saving, error }: { sample
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-3">
         <span className="text-xs text-muted">Keys: 1 2 3 to choose, J / K to move</span>
-        {error && <span role="alert" className="text-sm text-red-500">{error}</span>}
+        {error && <span role="alert" className="text-sm text-danger">{error}</span>}
         <button className="btn-primary" disabled={done === 0 || saving} onClick={onSave}>{saving && <Loader2 className="h-4 w-4 animate-spin" />} Save {done} label{done === 1 ? '' : 's'}</button>
       </div>
     </section>
@@ -140,12 +140,12 @@ export default function Calibration() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-4xl space-y-5 p-4 sm:p-6">
         <header>
-          <h1 className="text-[1.65rem] font-semibold tracking-tight">Judge calibration</h1>
+          <h1 className="text-[2.6rem] leading-[1.05]">Judge calibration</h1>
           <p className="mt-1 text-sm text-muted">A language model grades the answers. Here you check its grades against yours, without seeing them first. Until the two agree well, every number it produced carries an “uncalibrated” badge.</p>
         </header>
 
         {summary.isLoading && <div className="skeleton h-40" />}
-        {summary.isError && <p role="alert" className="text-sm text-red-500">Could not load the calibration summary.</p>}
+        {summary.isError && <p role="alert" className="text-sm text-danger">Could not load the calibration summary.</p>}
         {s && (
           <>
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="What to calibrate">
@@ -188,9 +188,9 @@ export default function Calibration() {
                 <button className="btn-primary" onClick={() => draw.mutate()} disabled={draw.isPending}>{draw.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />} Get a sample</button>
               </section>
             )}
-            {draw.isError && <p role="alert" className="text-sm text-red-500">{error(draw.error, 'Could not draw a sample.')}</p>}
+            {draw.isError && <p role="alert" className="text-sm text-danger">{error(draw.error, 'Could not draw a sample.')}</p>}
             {sample && sample.items.length === 0 && (
-              <p className="glass rounded-2xl p-5 text-sm text-muted">There is nothing to label yet. Run a <Link to="/experiments/new" className="font-medium text-accent underline-offset-4 hover:underline">full experiment</Link> first: it produces the answers and grades that are checked here.</p>
+              <p className="card text-sm text-muted">There is nothing to label yet. Run a <Link to="/experiments/new" className="font-medium text-accent underline-offset-4 hover:underline">full experiment</Link> first: it produces the answers and grades that are checked here.</p>
             )}
             {sample && sample.items.length > 0 && (
               <Labeller sample={sample} labels={labels} setLabels={setLabels} onSave={() => save.mutate()} saving={save.isPending} error={error(save.error, 'Could not save the labels.')} />

@@ -28,7 +28,7 @@ export default function XRayList() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
     <section className="mx-auto w-full max-w-4xl space-y-4 p-4 sm:p-6">
-      <h1 className="text-[1.65rem] font-semibold tracking-tight">X-Ray</h1>
+      <h1 className="text-[2.6rem] leading-[1.05]">X-Ray</h1>
       <p className="text-sm text-muted">Every answer leaves a trace: what was retrieved, how it was ranked, what reached the prompt, and why.</p>
       {items.length === 0 ? (
         <div className="card text-center text-sm text-muted">

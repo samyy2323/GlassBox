@@ -67,7 +67,7 @@ export default function AutotuneNew() {
         <header className="flex items-center gap-3">
           <Link to="/autotune" className="btn-ghost !px-2" aria-label="All AutoTune runs"><ChevronLeft className="h-4 w-4" /></Link>
           <div>
-            <h1 className="text-[1.5rem] font-semibold tracking-tight">New AutoTune</h1>
+            <h1 className="text-[2rem] leading-tight">New AutoTune</h1>
             <p className="text-sm text-muted">The test set is split. Every choice is made on 70% of the questions; only the other 30% is used for the result.</p>
           </div>
         </header>
@@ -146,7 +146,7 @@ export default function AutotuneNew() {
         <section className="glass space-y-2 rounded-2xl p-5" aria-label="Estimate" aria-live="polite">
           <h2 className="text-sm font-semibold">Estimate</h2>
           {estimate.isLoading && <div className="skeleton h-12" />}
-          {estimate.isError && <p className="text-sm text-red-500">{estimate.error instanceof ApiError ? estimate.error.message : 'Could not estimate.'}</p>}
+          {estimate.isError && <p className="text-sm text-danger">{estimate.error instanceof ApiError ? estimate.error.message : 'Could not estimate.'}</p>}
           {e && (
             <>
               <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -163,7 +163,7 @@ export default function AutotuneNew() {
           )}
         </section>
 
-        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pb-6">
           <Link to="/autotune" className="btn-ghost">Cancel</Link>
           <button className="btn-primary" disabled={!valid || create.isPending || (e?.needsConfirmation === true && !confirmed)} onClick={() => create.mutate()}>

@@ -96,7 +96,7 @@ export default function AutotuneDetail() {
         <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/autotune" className="btn-ghost !px-2" aria-label="All AutoTune runs"><ChevronLeft className="h-4 w-4" /></Link>
-            <h1 className="min-w-0 truncate text-[1.4rem] font-semibold tracking-tight">{a.name}</h1>
+            <h1 className="min-w-0 truncate text-[2rem] leading-tight">{a.name}</h1>
             <ExperimentStatusChip status={a.status} />
             <span className="chip">{OBJECTIVE_LABEL[a.objective].title}</span>
             {a.status === 'DONE' && <button className="btn-ghost ml-auto" onClick={() => setSharing(true)}><Share2 className="h-4 w-4" /> Share</button>}
@@ -106,7 +106,7 @@ export default function AutotuneDetail() {
             <Link to={`/testsets/${a.testsetId}/review`} className="font-medium text-accent underline-offset-4 hover:underline">{a.testsetName}</Link> · {a.split.tuning} questions to tune on, {a.split.heldOut} held out
             {a.stoppedBy === 'SPEND_CAP' && <span className="text-warn"> · stopped at the spend cap, best result so far</span>}
           </p>
-          {a.status === 'FAILED' && <p role="alert" className="text-sm text-red-500">{a.error}</p>}
+          {a.status === 'FAILED' && <p role="alert" className="text-sm text-danger">{a.error}</p>}
         </header>
 
         {isActive(a.status) && <Section title="Progress"><Steps a={a} /></Section>}
@@ -141,7 +141,7 @@ export default function AutotuneDetail() {
                     {promote.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : promote.isSuccess ? <Check className="h-4 w-4" /> : <Rocket className="h-4 w-4" />} {promote.isSuccess ? 'Now the workspace default' : 'Promote the winner to workspace default'}
                   </button>
                   <span className="text-xs text-muted">Chat and search start from this configuration; new uploads are indexed for it.</span>
-                  {promoteError && <span role="alert" className="text-sm text-red-500">{promoteError}</span>}
+                  {promoteError && <span role="alert" className="text-sm text-danger">{promoteError}</span>}
                 </div>
               )}
             </Section>

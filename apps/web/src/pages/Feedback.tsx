@@ -94,7 +94,7 @@ function Triage({ item }: { item: FeedbackItem }) {
             </div>
             {qtype !== 'UNANSWERABLE' && <label className="block space-y-1 text-xs text-muted">Expected answer<textarea className="input-glass text-sm" rows={2} value={expected} onChange={(e) => setExpected(e.target.value)} /></label>}
             {usable.find((t) => t.id === target)?.status === 'FINAL' && <p className="text-xs text-muted">That version is final, so a new draft version is made and the question goes into it.</p>}
-            {err && <p role="alert" className="text-sm text-red-500">{err}</p>}
+            {err && <p role="alert" className="text-sm text-danger">{err}</p>}
             <div className="flex gap-2">
               <button className="btn-primary" disabled={!canConvert(marked, qtype, expected, target) || convert.isPending} onClick={() => convert.mutate()}>{convert.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Add to the test set</button>
               <button className="btn-ghost" disabled={dismiss.isPending} onClick={() => dismiss.mutate()}><X className="h-4 w-4" /> Dismiss</button>
@@ -124,14 +124,14 @@ export default function Feedback() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
         <header>
-          <h1 className="flex items-center gap-2 text-[1.65rem] font-semibold tracking-tight"><Inbox className="h-6 w-6 text-accent" /> Feedback</h1>
+          <h1 className="flex items-center gap-2 text-[2.6rem] leading-[1.05]"><Inbox className="h-6 w-6 text-accent" /> Feedback</h1>
           <p className="mt-1 text-sm text-muted">Answers people marked as bad. Mark where the right answer is, and it becomes a test question, so the test set grows from real failures.</p>
           {summary.data && <p className="mt-1 text-sm">{fromFeedbackText(summary.data)} <span className="text-muted">{summary.data.open} open, {summary.data.converted} added, {summary.data.dismissed} dismissed.</span></p>}
         </header>
         <div className="flex gap-1.5" role="tablist" aria-label="Status">
           {['OPEN', 'CONVERTED', 'DISMISSED'].map((s) => <button key={s} role="tab" aria-selected={status === s} className={`btn-ghost !border ${status === s ? '!border-accent' : '!border-[var(--line)]'}`} onClick={() => { setStatus(s); setPick('') }}>{STATUS[s]}</button>)}
         </div>
-        {list.isLoading ? <div className="skeleton h-24" /> : items.length === 0 ? <p className="glass rounded-2xl p-6 text-sm text-muted">Nothing here. Use the thumbs under an answer in the chat to report a bad one.</p> : (
+        {list.isLoading ? <div className="skeleton h-24" /> : items.length === 0 ? <p className="card text-sm text-muted">Nothing here. Use the thumbs under an answer in the chat to report a bad one.</p> : (
           <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
             <ul className="space-y-1.5" aria-label="Feedback items">
               {items.map((i) => (
