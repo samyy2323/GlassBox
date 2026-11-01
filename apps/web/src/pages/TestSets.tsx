@@ -33,7 +33,7 @@ function GroupCard({ name, versions }: { name: string; versions: TestSet[] }) {
     <li className="card glass-interactive animate-rise">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/testsets/${latest.id}/review`} className="display block truncate text-[1.6rem] leading-tight hover:text-accent" title={name}>{name}</Link>
+          <Link to={`/testsets/${latest.id}/review`} className="display block truncate text-[1.6rem] leading-tight hover:text-accent after:absolute after:inset-0 after:z-0 after:rounded-[inherit] after:content-['']" title={name}>{name}</Link>
           <p className="mt-0.5 text-xs text-muted">Version {latest.version} · created {new Date(latest.createdAt).toLocaleDateString()}</p>
         </div>
         <SetStatus status={latest.status} />
@@ -58,14 +58,14 @@ function GroupCard({ name, versions }: { name: string; versions: TestSet[] }) {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--line)] pt-3 text-sm">
-        <Link to={`/testsets/${latest.id}/review`} className="btn-glass !py-1.5 !text-[0.84rem]">
+        <Link to={`/testsets/${latest.id}/review`} className="btn-glass relative z-10 !py-1.5 !text-[0.84rem]">
           {latest.status === 'DRAFT' ? 'Review questions →' : 'Open →'}
         </Link>
         {versions.length > 1 && (
           <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
             Other versions:
             {versions.slice(1).map((v) => (
-              <Link key={v.id} to={`/testsets/${v.id}/review`} className="chip hover:text-accent">v{v.version} · {STATUS_LABEL[v.status]}</Link>
+              <Link key={v.id} to={`/testsets/${v.id}/review`} className="chip relative z-10 hover:text-accent">v{v.version} · {STATUS_LABEL[v.status]}</Link>
             ))}
           </span>
         )}

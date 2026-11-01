@@ -13,7 +13,7 @@ function Card({ a }: { a: AutotuneSummary }) {
     <li className="card glass-interactive animate-rise">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/autotune/${a.id}`} className="block truncate display text-[1.5rem] leading-tight hover:text-accent">{a.name}</Link>
+          <Link to={`/autotune/${a.id}`} className="block truncate display text-[1.5rem] leading-tight hover:text-accent after:absolute after:inset-0 after:content-['']">{a.name}</Link>
           <p className="mt-0.5 text-xs text-muted">{a.testsetName} · {OBJECTIVE_LABEL[a.objective].title} · {new Date(a.createdAt).toLocaleDateString()}</p>
         </div>
         <ExperimentStatusChip status={a.status} />

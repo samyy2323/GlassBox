@@ -28,7 +28,7 @@ function Card({ e }: { e: Experiment }) {
     <li className="card glass-interactive animate-rise">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/experiments/${e.id}`} className="display block truncate text-[1.6rem] leading-tight hover:text-accent">{e.name}</Link>
+          <Link to={`/experiments/${e.id}`} className="display block truncate text-[1.6rem] leading-tight hover:text-accent after:absolute after:inset-0 after:z-0 after:rounded-[inherit] after:content-['']">{e.name}</Link>
           <p className="mt-0.5 text-xs text-muted">
             {e.testsetName} v{e.testsetVersion} · {e.mode === 'FULL' ? 'full answers and judging' : 'retrieval only'} · {e.runs.length} configuration{e.runs.length === 1 ? '' : 's'} · {e.questionCount} questions · {new Date(e.createdAt).toLocaleDateString()}
           </p>
