@@ -4,7 +4,6 @@ import dev.glassbox.tenancy.Tx;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
  * {@code glassbox.demo.enabled} is set, and the account must already exist (the demo seed creates it as a viewer of the demo workspace).
  */
 @Component
-@Profile("api")
 public class DemoMode {
     private final boolean enabled;
     private final String viewerEmail;
