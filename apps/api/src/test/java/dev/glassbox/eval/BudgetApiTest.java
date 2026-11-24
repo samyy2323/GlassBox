@@ -27,7 +27,9 @@ class BudgetApiTest extends EvalApiSupport {
         assertThat(free.get("estimatedUsd").asDouble()).isZero();
         assertThat(free.get("estimatedTokens").asLong()).isPositive();
         assertThat(free.get("breakdown").get("generation").get("calls").asInt()).isEqualTo(free.get("questions").asInt());
-        assertThat(free.get("breakdown").get("judging").get("calls").asInt()).isEqualTo(4 * free.get("questions").asInt());
+        // four judge calls a question, less the share the cache is expected to serve (which depends on what this JVM has already run)
+        double miss = 1 - free.get("breakdown").get("cacheHitRate").asDouble();
+        assertThat(free.get("breakdown").get("judging").get("calls").asInt()).isEqualTo((int) Math.round(4 * free.get("questions").asInt() * miss));
 
         price(a, 1000, 2000);
         JsonNode priced = ok(send(post("/api/experiments/estimate"), a, body));
