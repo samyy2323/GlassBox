@@ -23,7 +23,7 @@ import uuid
 BASE = os.environ.get("GLASSBOX_SERVER", "http://localhost:8080").rstrip("/")
 EMAIL = os.environ.get("GLASSBOX_DEMO_EMAIL", "demo@glassbox.local")
 PASSWORD = os.environ.get("GLASSBOX_DEMO_PASSWORD", "")
-QUESTIONS_IN_SET = int(os.environ.get("GLASSBOX_DEMO_QUESTIONS", "24"))
+QUESTIONS_IN_SET = int(os.environ.get("GLASSBOX_DEMO_QUESTIONS", "40"))
 SAMPLES = pathlib.Path(__file__).resolve().parent.parent / "samples"
 TOKEN = ""
 WS = ""
@@ -131,15 +131,19 @@ def step(name, fn):
 
 
 def documents():
-    r = upload(SAMPLES / "Harbor-Logistics-Handbook.md")
-    R["doc"] = r.get("id") or r.get("document", {}).get("id")
-    end = time.time() + 600
+    """The Harbor handbook (it is later replaced by its second edition) and the twelve site handbooks, so the test set has real variety."""
+    files = [SAMPLES / "Harbor-Logistics-Handbook.md"] + sorted((SAMPLES.parent / "benchmarks" / "corpus-p4").glob("*.md"))
+    for f in files:
+        upload(f)
+    end = time.time() + 900
     while time.time() < end:
-        docs = api("GET", "/api/documents?limit=10")["items"]
-        if docs and all(d["status"] in ("READY", "FAILED") for d in docs):
-            R["doc"] = docs[0]["id"]
-            if docs[0]["status"] != "READY":
-                raise RuntimeError("the sample handbook did not index: " + str(docs[0].get("error")))
+        docs = api("GET", "/api/documents?limit=100")["items"]
+        if len(docs) >= len(files) and all(d["status"] in ("READY", "FAILED") for d in docs):
+            bad = [d["title"] for d in docs if d["status"] != "READY"]
+            if bad:
+                raise RuntimeError("did not index: " + ", ".join(bad))
+            R["doc"] = next(d["id"] for d in docs if d["title"].startswith("Harbor-Logistics"))
+            log(f"{len(docs)} documents indexed")
             return
         time.sleep(3)
     raise RuntimeError("indexing did not finish")
@@ -150,7 +154,17 @@ def testset():
     x = wait(f"/api/testsets/{t['id']}", {"DRAFT", "FAILED"}, 60, 15)
     if x["status"] == "FAILED":
         raise RuntimeError(x.get("error") or "generation failed")
+    # The reviewer's job, done by the script: the automatic checks flag a lot with a small model. A question flagged only as "ambiguous" is kept (the model's
+    # own judgement of ambiguity is noisy); one that copies the passage or that the evidence cannot answer is rejected; the rest were accepted by the rules.
     api("POST", f"/api/testsets/{t['id']}/bulk-accept")
+    kept = dropped = 0
+    for q in api("GET", f"/api/testsets/{t['id']}/questions?limit=500")["items"]:
+        if q["reviewStatus"] != "PENDING":
+            continue
+        bad = {"COPY_RISK", "LOW_ANSWERABILITY"} & set(q["flags"])
+        api("PATCH", f"/api/questions/{q['id']}", {"reviewStatus": "REJECTED" if bad else "ACCEPTED"})
+        dropped, kept = dropped + bool(bad), kept + (not bad)
+    log(f"reviewed: kept {kept} flagged-as-ambiguous questions, rejected {dropped} that copy the text or cannot be answered")
     done = api("POST", f"/api/testsets/{t['id']}/finalize", {"allowPending": True})
     R["set1"] = t["id"]
     log(f"test set finalized: {done['stats']['accepted']} accepted of {done['stats']['total']}")
@@ -213,7 +227,7 @@ def feedback():
 
 def report():
     rep = api("POST", "/api/reports", {"kind": "EXPERIMENT", "refId": R.get("exp_full") or "", "redact": False})
-    api("POST", f"/api/reports/{rep['id']}/links", {"days": 3650})
+    api("POST", f"/api/reports/{rep['id']}/links", {"days": 90})
     log("report made")
 
 
