@@ -1,12 +1,9 @@
 name: space-image
 
 # Builds the single-container demo image (deploy/space/Dockerfile) and publishes it to GitHub's container registry.
-# Run it by hand, or it runs when the demo seed or the image files change on main.
+# Run it by hand (Actions, space-image).
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['deploy/space/**', 'apps/**', 'db/**']
 
 permissions:
   contents: read

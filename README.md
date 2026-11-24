@@ -4,7 +4,7 @@
 
 Multi-tenant RAG evaluation and auto-tuning platform: upload documents, generate a test set, search configurations, compare them with confidence intervals, and diagnose every failure. The full plan is in [docs/SPEC.md](docs/SPEC.md).
 
-## Status
+**Live demo: https://samyy2323.github.io/GlassBox/** (press "Try the demo"). It is the real interface running on results recorded from a seeded instance: a 13-document library, a reviewed test set, retrieval and full-answer experiments with confidence intervals, an AutoTune search, X-Ray traces, a feedback item turned into a test question and a document-change report. It is a recording, so asking questions and uploading are switched off; run it yourself (below) for the live system. How it is made: `deploy/seed_demo.py` fills a fresh instance through the API, `deploy/record_demo.py` captures what the interface reads, and `apps/web/src/lib/staticDemo.ts` serves that capture in the Pages build. `deploy/space/` holds a single-container image of the whole stack (database, API, worker, embedding sidecar) for hosts that run one container.
 
 | Phase | State |
 | --- | --- |
