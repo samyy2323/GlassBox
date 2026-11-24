@@ -1,0 +1,2 @@
+# This is the whole Dockerfile of the Hugging Face Space repository: it only pulls the image the space-image workflow built.
+FROM ghcr.io/samyy2323/glassbox-demo:latest
