@@ -3,6 +3,7 @@ package dev.glassbox.auth;
 import dev.glassbox.tenancy.Tx;
 import java.util.Arrays;
 import java.util.List;
+import dev.glassbox.ratelimit.ApiRateLimitFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +30,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtService jwt, Tx tx, dev.glassbox.ratelimit.ApiRateLimitFilter rateLimit) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, JwtService jwt, Tx tx, dev.glassbox.ratelimit.ApiRateLimitFilter rateLimit, DemoMode demo) throws Exception {
         http
             // Stateless bearer/API-key auth. The only cookie (refresh) is SameSite=Strict, path-scoped and
             // requires a custom header, so classic CSRF tokens are replaced by those three controls.
@@ -46,14 +47,15 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 // SSE completes on an ASYNC dispatch that has no auth context; the REQUEST dispatch was already checked.
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
-                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
+                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/demo", "/api/auth/refresh", "/api/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health/**", "/actuator/prometheus").permitAll()
                 // a share link: the token in the path is the credential, and the endpoint reads one frozen snapshot (see V18)
                 .requestMatchers(HttpMethod.GET, "/api/public/reports/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().denyAll())
             .addFilterBefore(new AuthenticationFilter(jwt, tx), UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(rateLimit, AuthenticationFilter.class);
+            .addFilterAfter(rateLimit, AuthenticationFilter.class)
+            .addFilterAfter(new DemoGuardFilter(demo), ApiRateLimitFilter.class);
         return http.build();
     }
 

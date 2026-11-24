@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Loader2, Moon, ScanSearch, ShieldCheck, Sun, Zap } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
 import { Aurora } from '../components/Aurora'
 import { CubeStage } from '../components/CubeStage'
 import { Wordmark } from '../components/Logo'
 import { Tabs } from '../components/Tabs'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
 
@@ -16,7 +18,9 @@ const PROOFS = [
 ]
 
 export default function Login() {
-  const { user, signIn } = useAuth()
+  const { user, signIn, signInDemo } = useAuth()
+  // The server says whether it runs a public read-only demo; a local install does not, and then there is no button.
+  const demo = useQuery({ queryKey: ['demo-info'], queryFn: api.demoInfo, retry: false, staleTime: Infinity })
   const [theme, toggleTheme] = useTheme()
   const [mode, setMode] = useState<'in' | 'up'>('in')
   const [email, setEmail] = useState('')
@@ -26,6 +30,17 @@ export default function Login() {
   const register = mode === 'up'
 
   if (user) return <Navigate to="/chat" replace />
+
+  async function tryDemo() {
+    setBusy(true)
+    setError(null)
+    try {
+      await signInDemo()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The demo is not available')
+      setBusy(false)
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -109,6 +124,11 @@ export default function Login() {
             <button className="btn-primary w-full !py-3" disabled={busy}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <>{register ? 'Create account' : 'Sign in'} <ArrowRight className="h-4 w-4" /></>}
             </button>
+            {demo.data?.enabled && (
+              <button type="button" className="btn-glass w-full !py-2.5" disabled={busy} onClick={() => void tryDemo()}>
+                Try the demo <span className="text-xs font-normal text-muted">read-only, no sign-up</span>
+              </button>
+            )}
             <p className="flex items-center justify-center gap-2 text-center text-xs text-muted [@media(max-height:700px)]:hidden">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> Each workspace is isolated by the database itself.
             </p>

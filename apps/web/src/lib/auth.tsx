@@ -5,6 +5,7 @@ interface AuthState {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string, register: boolean) => Promise<void>
+  signInDemo: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -47,6 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accept],
   )
 
+  const signInDemo = useCallback(async () => accept(await api.demo()), [accept])
+
   const signOut = useCallback(async () => {
     await api.logout().catch(() => undefined)
     setAccessToken(null)
@@ -54,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  return <Ctx.Provider value={{ user, loading, signIn, signOut }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ user, loading, signIn, signInDemo, signOut }}>{children}</Ctx.Provider>
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

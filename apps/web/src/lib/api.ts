@@ -747,6 +747,8 @@ export const api = {
     request<AuthResponse>('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
     request<AuthResponse>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  demoInfo: () => request<{ enabled: boolean; email: string }>('/api/auth/demo'),
+  demo: () => request<AuthResponse>('/api/auth/demo', { method: 'POST' }),
   refresh: () => request<AuthResponse>('/api/auth/refresh', { method: 'POST', headers: csrf }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST', headers: csrf }),
   workspaces: () => request<Workspace[]>('/api/workspaces'),

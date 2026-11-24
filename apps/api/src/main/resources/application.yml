@@ -54,6 +54,10 @@ glassbox:
     # experiments and AutoTune searches of one workspace that may be queued or running at once
     max-active-runs: 3
     max-file-bytes: 26214400
+  demo:
+    # A public read-only demo: one passwordless viewer account (created by the demo seed). Off unless switched on.
+    enabled: ${GLASSBOX_DEMO_ENABLED:false}
+    viewer-email: ${GLASSBOX_DEMO_EMAIL:demo@glassbox.local}
   llm:
     # Any OpenAI-compatible chat endpoint: Ollama (default), Groq, OpenRouter, Gemini's compatible API, vLLM.
     base-url: ${GLASSBOX_LLM_BASE_URL:http://localhost:11434}

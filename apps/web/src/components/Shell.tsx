@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Menu, UploadCloud } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Eye, Menu, UploadCloud } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useRecentTraces } from '../lib/history'
 import { SUPPORTED_SUMMARY } from '../lib/formats'
@@ -50,7 +52,9 @@ function useFileDrag(onDrop: (files: File[]) => void) {
 export function Shell() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signOut } = useAuth()
+  const { user, signOut } = useAuth()
+  const demo = useQuery({ queryKey: ['demo-info'], queryFn: api.demoInfo, retry: false, staleTime: Infinity })
+  const isDemo = !!demo.data?.enabled && user?.email === demo.data.email
   const { workspaces, current, select } = useWorkspace()
   const { enqueue } = useUploads()
   const history = useRecentTraces()
@@ -107,6 +111,13 @@ export function Shell() {
           <button className="btn-ghost !rounded-xl !p-2.5" onClick={() => setMenu(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
           <Wordmark />
         </header>
+        {isDemo && (
+          <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-[var(--line)] bg-accent/10 px-4 py-2 text-center text-[0.8rem]">
+            <Eye className="h-3.5 w-3.5 text-accent" aria-hidden />
+            <span>You are in the read-only demo: everything here was recorded in advance.</span>
+            <button type="button" className="font-semibold text-accent underline-offset-4 hover:underline" onClick={() => void signOut()}>Create an account to use your own documents</button>
+          </div>
+        )}
         <main className="relative flex min-h-0 flex-1 flex-col">
           {/* A short fade and rise between pages. Keyed by the path, so moving between pages animates and a re-render of one page does not. */}
           <AnimatePresence mode="wait" initial={false}>

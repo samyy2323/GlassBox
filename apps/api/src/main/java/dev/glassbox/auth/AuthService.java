@@ -54,6 +54,13 @@ public class AuthService {
         return startSession(new User((UUID) row.get("id"), (String) row.get("email")));
     }
 
+    /** Signs in the demo viewer without a password. Only {@link DemoMode} decides whether this may be called. */
+    public Session demo(String email) {
+        Map<String, Object> row = tx.anonymous(j -> j.queryForList("SELECT id, email, password_hash FROM auth_find_user(?)", email).stream().findFirst().orElse(null));
+        if (row == null) throw ApiException.notFound("The demo has not been set up on this server");
+        return startSession(new User((UUID) row.get("id"), (String) row.get("email")));
+    }
+
     /** Rotates the refresh token. Reuse of a revoked token revokes every token of that user. */
     public Session refresh(String cookieValue) {
         UUID userId = parseUser(cookieValue);

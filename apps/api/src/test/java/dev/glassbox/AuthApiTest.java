@@ -152,4 +152,10 @@ class AuthApiTest {
     void healthIsPublic() throws Exception {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }
+
+    @Test
+    void theDemoSignInDoesNotExistUnlessSwitchedOn() throws Exception {
+        mvc.perform(post("/api/auth/demo")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/auth/demo")).andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+    }
 }

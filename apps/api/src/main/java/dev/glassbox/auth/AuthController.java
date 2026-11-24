@@ -25,10 +25,12 @@ public class AuthController {
     public record AuthResponse(AuthService.User user, String accessToken, long expiresIn) {}
 
     private final AuthService auth;
+    private final DemoMode demo;
     private final boolean secureCookie;
 
-    public AuthController(AuthService auth, @Value("${glassbox.refresh.secure-cookie}") boolean secureCookie) {
+    public AuthController(AuthService auth, DemoMode demo, @Value("${glassbox.refresh.secure-cookie}") boolean secureCookie) {
         this.auth = auth;
+        this.demo = demo;
         this.secureCookie = secureCookie;
     }
 
@@ -40,6 +42,19 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginBody body) {
         return respond(auth.login(body.email(), body.password()));
+    }
+
+    /** Tells the sign-in page whether to offer the demo button, and the shell which account is the read-only one. */
+    @GetMapping("/demo")
+    public java.util.Map<String, Object> demoInfo() {
+        return java.util.Map.of("enabled", demo.enabled(), "email", demo.enabled() ? demo.viewerEmail() : "");
+    }
+
+    /** The public demo: signs in the read-only demo viewer. Not found unless the server was started with the demo switched on. */
+    @PostMapping("/demo")
+    public ResponseEntity<AuthResponse> demo() {
+        if (!demo.enabled()) throw ApiException.notFound("Not found");
+        return respond(auth.demo(demo.viewerEmail()));
     }
 
     @PostMapping("/refresh")
