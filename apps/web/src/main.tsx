@@ -14,8 +14,20 @@ applyInitialTheme() // before the first paint, so there is no flash of the wrong
 installPointerLight() // the light that follows the cursor over interactive glass
 preloadCube() // the 3D cube of the splash screen starts downloading now, not when the splash asks for it
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+function start() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+// The recorded demo build answers /api/ from recorded data; a normal build never loads that code.
+if (import.meta.env.VITE_STATIC_DEMO === '1') {
+  void import('./lib/staticDemo').then((m) => {
+    m.installStaticDemo()
+    start()
+  })
+} else {
+  start()
+}

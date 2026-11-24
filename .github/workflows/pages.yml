@@ -1,0 +1,51 @@
+name: pages
+
+# Publishes the recorded demo: the real interface, built so that it answers from recorded data (apps/web/public/demo-data/api.json) instead of a server.
+# https://<owner>.github.io/GlassBox/  Run by hand or on a change to the web app or the recording.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['apps/web/**']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+        working-directory: apps/web
+      - run: npm run build
+        working-directory: apps/web
+        env:
+          VITE_STATIC_DEMO: '1'
+          VITE_BASE: /GlassBox/
+      # A single-page app on Pages: any unknown path serves the app, which then routes it.
+      - run: cp apps/web/dist/index.html apps/web/dist/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

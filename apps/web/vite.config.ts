@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react'
 // A browser on :5173 sends "Origin: http://localhost:5173" with every POST, and the API (rightly) allows only the origin it is deployed at, so the proxy
 // presents that origin instead. Without this, signing in from the dev server answers 403 Forbidden.
 export default defineConfig({
+  // The recorded demo is served from a sub-path (GitHub Pages), so the build can be given a base; everything else uses the root.
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   server: {
     proxy: {
